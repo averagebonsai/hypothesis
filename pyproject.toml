@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "LLM-driven microeconomic simulator"
 requires-python = ">=3.13"
 dependencies = [
+    "numpy>=2.5.4",
     "pydantic>=2,<3",
     "python-dotenv>=1.2.4",
+    "scipy>=1.18.1",
 ]
 
 [build-system]
@@ -23,6 +25,7 @@ dev = [
     "ipykernel",
     "matplotlib",
     "mypy>=2.4.1",
+    "scipy-stubs>=1.18.1.1",
 ]
 
 [tool.pytest.ini_options]

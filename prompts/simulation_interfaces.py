@@ -1,5 +1,13 @@
 """Reference interface contract for a composable simulation engine.
 
+M2.2 implementations also include economics.py abstract model primitives and
+GameView / FiniteGameView / BestResponseGameView capabilities in solver.py.
+Continuous best responses can report an unattained supremum plus a witness.
+The homogeneous Bertrand benchmark is analytical, not finite enumeration.
+Differentiated demand now uses DemandSystem/DifferentiableDemandSystem.
+DifferentiableScalarGameView supports generic numerical Nash searches; numerical
+results and best-response estimates are explicitly labeled by certification.
+
 SUPERSEDED IN PART by simulation_implementation_plan_readable.md sections 12–14.
 Implemented M1 abstract parents and models live under src/simulation_core.
 Observation projection is trusted core code, not a protocol method. Outcomes

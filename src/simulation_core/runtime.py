@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 
 from .logging import log_committed_decisions
@@ -79,7 +80,7 @@ class SimulationRuntime:
                 if action.actor_id != aid or action.kind not in actor.action_space.schemas:
                     raise ValueError("Invalid action ownership or kind")
                 schema = self.registry.action_schemas[actor.action_space.schemas[action.kind]]
-                schema.model_validate(action.payload, strict=True)
+                schema.model_validate_json(json.dumps(action.payload, allow_nan=False), strict=True)
                 if set(decision.private_updates) - set(permissions.writable_private_fields):
                     raise ValueError("Unauthorized private update")
                 if decision.memory_update is not None and not permissions.writable_memory:

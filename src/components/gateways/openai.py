@@ -116,8 +116,19 @@ class OpenAIResponsesGateway(ModelGateway):
             raise GatewayError("provider_response_too_large")
         try:
             data = json.loads(raw)
+            usage = data.get("usage") or {}
             if data.get("status") != "completed":
-                raise GatewayError("provider_incomplete")
+                details = data.get("incomplete_details") or {}
+                reason = details.get("reason")
+                category = "provider_incomplete"
+                if reason in {"max_output_tokens", "content_filter"}:
+                    category += "_" + reason
+                raise GatewayError(
+                    category,
+                    request_id=data.get("id"),
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                )
             texts = []
             for item in data.get("output", []):
                 if item.get("type") == "message":

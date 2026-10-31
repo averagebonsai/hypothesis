@@ -1,5 +1,6 @@
 """JSON boundary models. Nested values are isolated with deep snapshots at runtime."""
 
+import json
 from math import isfinite
 from typing import Literal, Self
 
@@ -8,6 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, m
 
 class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    @classmethod
+    def from_json_values(cls, value: JsonValue) -> Self:
+        """Validate JSON transport values as JSON, including tuple-backed array schemas."""
+        return cls.model_validate_json(json.dumps(value, allow_nan=False))
 
     @model_validator(mode="after")
     def finite_json(self) -> Self:

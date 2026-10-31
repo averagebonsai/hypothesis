@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
-from simulation_core.solver import Equilibrium, GameView, Solver, SolveResult
+from simulation_core.solver import Equilibrium, FiniteGameView, GameView, Solver, SolveResult
 from simulation_core.types import FrozenModel
 
 
@@ -18,6 +18,10 @@ class PureNashParameters(FrozenModel):
 class PureNashSolver(Solver):
     def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         params = PureNashParameters.model_validate(parameters)
+        if not isinstance(game, FiniteGameView):
+            return SolveResult(
+                status="unsupported", diagnostics={"reason": "Finite action enumeration required"}
+            )
         ids = game.actor_ids()
         choices = [game.actions(aid) for aid in ids]
         if not ids or any(not actions for actions in choices):

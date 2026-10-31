@@ -28,7 +28,20 @@ class ModelResponse(FrozenModel):
 
 
 class GatewayError(RuntimeError):
-    """Sanitized category only; no credentials, request bodies, or provider error text."""
+    """Sanitized category and usage metadata, never credentials or raw provider errors."""
+
+    def __init__(
+        self,
+        category: str,
+        *,
+        request_id: str | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
+        super().__init__(category)
+        self.request_id = request_id
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 class ModelGateway(ABC):

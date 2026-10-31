@@ -4,19 +4,37 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
-from pydantic import Field
+from pydantic import Field, JsonValue
 
-from .solver import SolveResult, deviation_regrets
+from .solver import BestResponseGameView, BestResponseResult, SolveResult, deviation_regrets
 from .types import Action, FrozenModel, RunResult, SimulationConfig
 
 if TYPE_CHECKING:
     from .registry import ComponentRegistry
 
 
+def numeric_deltas(
+    values: dict[str, JsonValue], reference: dict[str, JsonValue]
+) -> dict[str, float]:
+    result = {}
+    for key, value in values.items():
+        other = reference.get(key)
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and isinstance(other, (int, float))
+            and not isinstance(other, bool)
+        ):
+            result[key] = float(value) - float(other)
+    return result
+
+
 class EquilibriumComparison(FrozenModel):
     equilibrium_index: int
     payoff_deltas: dict[str, float]
     action_differences: dict[str, bool]
+    numeric_action_deltas: dict[str, dict[str, float]] = Field(default_factory=dict)
+    metric_deltas: dict[str, float] = Field(default_factory=dict)
 
 
 class BenchmarkReport(FrozenModel):
@@ -25,6 +43,7 @@ class BenchmarkReport(FrozenModel):
     result: SolveResult
     observed_actions: tuple[Action, ...] = ()
     observed_regrets: dict[str, float] = Field(default_factory=dict)
+    observed_best_responses: dict[str, BestResponseResult] = Field(default_factory=dict)
     comparisons: tuple[EquilibriumComparison, ...] = ()
 
 
@@ -58,7 +77,7 @@ class BenchmarkRunner:
             )
             solver = self.registry.solvers[spec.solver_id]()
             solved = solver.solve(game, dict(spec.parameters))
-            if solved.status in {"failed", "budget_exhausted"}:
+            if solved.status in {"failed", "budget_exhausted", "unsupported"}:
                 return BenchmarkReport(
                     config_sha256=digest,
                     comparison_tick=tick,
@@ -76,6 +95,11 @@ class BenchmarkRunner:
                 comparisons.append(
                     EquilibriumComparison(
                         equilibrium_index=index,
+                        numeric_action_deltas={
+                            aid: numeric_deltas(by_actor[aid].payload, reference[aid].payload)
+                            for aid in game.actor_ids()
+                        },
+                        metric_deltas=numeric_deltas(observed.metrics, equilibrium.outcome.metrics),
                         payoff_deltas={
                             aid: observed.payoffs[aid] - equilibrium.outcome.payoffs[aid]
                             for aid in game.actor_ids()
@@ -85,12 +109,20 @@ class BenchmarkRunner:
                         },
                     )
                 )
+            responses = (
+                {aid: game.best_response(aid, profile) for aid in game.actor_ids()}
+                if isinstance(game, BestResponseGameView)
+                else {}
+            )
             return BenchmarkReport(
                 config_sha256=digest,
                 comparison_tick=tick,
                 result=solved,
                 observed_actions=profile,
-                observed_regrets=deviation_regrets(game, profile),
+                observed_regrets={aid: response.gain for aid, response in responses.items()}
+                if responses
+                else deviation_regrets(game, profile),
+                observed_best_responses=responses,
                 comparisons=tuple(comparisons),
             )
         except (ArithmeticError, ValueError, StopIteration) as exc:

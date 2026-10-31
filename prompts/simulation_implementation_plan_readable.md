@@ -536,3 +536,163 @@ The previous fake example A=cooperate/B=defect was hardcoded test data, not live
 model behavior. Notebook USE_LIVE_API=True now incurs calls on re-execution;
 False retains the deterministic offline fixture. This single live run demonstrates
 integration, not calibrated human behavior or a guarantee of future identical choices.
+
+## 18. M2.2 first increment — textbook homogeneous Bertrand
+
+User scope supersedes the earlier suggestion to begin with differentiated demand.
+Implement homogeneous goods first; differentiated Bertrand is deferred. Two LLM
+firms set prices simultaneously; q_i=Q(p_i) below rival price, Q(p_i)/2 at an exact
+tie, and zero above it, where Q(P)=max(a-bP,0). Identical constant marginal cost,
+unlimited capacity, no fixed costs, complete information, and one round form the
+default textbook example. Default a=100, b=1, c=20, price domain [0,100] are recorded
+illustrative assumptions. Prices are continuous with no cents grid or tie epsilon.
+LLMs receive the piecewise function and parameters; the benchmark solution is not
+included in their observation. Current rival prices remain hidden until commit.
+
+General economic parents: DemandModel (aggregate demand at one market price),
+CostModel, ProfitModel, and AllocationRule. Implement LinearDemand,
+ConstantMarginalCost, RevenueMinusCost, and exact LowestPriceAllocation; compose
+these in HomogeneousBertrandMechanism. Enforce finite/nonnegative prices and
+quantities, actor references, price bounds, allocation conservation, history and
+outcome invariants. The mechanism supports arbitrary IDs and multiple firms;
+its two-firm example uses a typed BertrandExampleSettings builder. Core runtime
+and generic LLMPolicy remain independent of the experiment.
+
+Generalize GameView into a payoff view, FiniteGameView for enumerable actions,
+and BestResponseGameView for continuous unilateral optimization. A best response
+may report an unattained payoff supremum with no maximizing action plus a feasible
+witness. Do not silently use a price grid, minimum price decrement, or smooth solver
+at the discontinuous tie boundary. The shared deviation diagnostic belongs to the
+game-theory benchmark layer, not the runtime or an individual experiment.
+
+TextbookBertrandSolver certifies p_A=p_B=c only for two identical-cost firms with
+feasible cost, room above it, and positive demand at cost. Reuse mechanism payoff
+primitives and a region-wise continuous best-response oracle to check unilateral
+gains. Report price bounds, payoff tolerance, theorem scope, and unsupported
+assumptions explicitly. No finite profile count applies to a continuous benchmark.
+Asymmetric costs or a price floor outside scope report unsupported without
+invalidating a completed actor run or claiming nonexistence. Keep p=c distinct
+from the monopoly/joint-profit maximum. Shared comparison records add numeric
+action/metric differences and full best-response diagnostics.
+
+Acceptance checks: undercut winner captures all demand; exact tie halves it;
+demand is truncated at zero; below-cost sales lose money; own-price demand weakly
+decreases (including the tie jump); prices/schema violations fail before transition;
+configuration/state/evaluation remain isolated; p=c and q_i=(a-bc)/2 match across
+parameters; no profitable unilateral deviation at the benchmark; above-cost rival
+examples correctly distinguish attained monopoly best responses from unattained
+undercutting limits; independent dense-grid checks lower-bound the analytic
+supremum; arbitrary firm IDs/multifirm allocation; actor privacy and simultaneous
+observations; per-action explanations, replay, and benchmark independence.
+
+`visualisations/bertrand.ipynb` imports packaged code and compares actual LLM prices,
+quantities/profits, and rationales with the mathematical equilibrium, alongside
+piecewise demand plots, deviation qualifications, provenance, and assumptions.
+Verify offline first, then use a bounded live run with the existing .env provider.
+The existing finite-game notebook and the user's generic policy wording are preserved.
+
+
+M2.2 homogeneous Bertrand completion: the notebook was verified offline and then
+executed live with muse-spark-1.3-contributor. Both firms chose p=20, matching the
+analytical benchmark; each supplied 40 units and earned zero profit. Both live
+requests were accepted on the first attempt and retained a stated rationale.
+The full suite passed 101 tests (one opt-in live pytest skipped); notebook live
+execution was verified independently. Differentiated Bertrand remains deferred.
+
+## 19. Differentiated Bertrand and typed user inputs
+
+Implement the originally planned segmented-logit model with an outside option.
+Each firm supplies its ID, constant marginal cost, feasible price interval, and
+optional persona. Each segment supplies ID, population, positive price sensitivity,
+and one utility for every firm, plus optional outside utility. The outside baseline
+defaults to zero and must be recorded when omitted. Utilities and sensitivities must
+use coherent units. At least two firms and one segment are supported, with arbitrary
+IDs and firm-specific bounds. Inputs are Pydantic models and can round-trip through
+JSON. Missing required numerics and inconsistent dimensions fail, not silently default.
+
+The compiler maps supplied inputs to validated SimulationConfig paths, records them
+in ExperimentRequest, and records assumptions and information permissions. The
+notebook supplies clearly labeled illustrative numbers until the user replaces
+them. Explicit per-firm permissions override default complete public information;
+private observations remain own-actor only. A complete-information mathematical
+benchmark is explicitly identified even if actor information is restricted.
+
+DemandSystem and DifferentiableDemandSystem are reusable joint-price interfaces,
+distinct from scalar aggregate DemandModel. SegmentedLogitDemand uses a stable
+maximum-centered exponential calculation including the outside utility. Its result
+validates per-segment probabilities and population conservation. The differentiated
+mechanism composes demand, constant costs, and existing profit evaluation. It owns
+the own-profit gradient; policies and solvers do not duplicate economic equations.
+Price actions, protocol, LLMPolicy, event traces, and job cleanup are reused. Only a
+general JSON-boundary validation fix is needed in the runtime: JSON-compatible
+parameters/payloads are validated as JSON so strict tuple-backed schemas accept
+transported arrays without weakening scalar validation.
+
+DifferentiableScalarGameView supplies generic bounds, scalar actions, own-payoff
+gradients, and numerical best responses. A generic NumericalNashSolver searches
+multiple initial price profiles with bounded projected-gradient roots; verifies
+candidate unilateral gains with uniform/geometric sampling and local peak
+refinements plus independent SHGO; and attempts a bounded best-response fallback
+when root search fails. Include boundaries in searches, preserve actual negative
+profits where bounds force losses, impose objective budgets, and report boundary
+flags. Retain all distinct candidates found. Never claim uniqueness or a rigorous
+global maximum from numerical convergence. Both SolveResult and BestResponseResult
+carry numerical-versus-analytic certification. Failed searches/budget exhaustion
+remain separate from the primary actor result and do not prove nonexistence.
+
+Acceptance includes: analytic equal-share/symmetric-price case; outside conservation;
+positive demand for differentiated products at unequal prices; own/cross-price
+response directions; utility translation invariance; finite extreme-utility outcomes;
+derivative finite differences; malformed dimensions/nonfinite inputs; user input
+preservation and default provenance; bounds and constrained equilibria; wide-bound
+search robustness; independent dense-grid lower checks; multi-equilibrium generic
+game and rejection of a stationary profit minimum; bounded fallback/failure/budgets;
+private information, simultaneous observations, rationales, replay, and purity.
+
+`visualisations/differentiated_bertrand.ipynb` contains an editable Pydantic input
+cell and demonstrates the complete flow with the existing live provider. Numerical
+charts use an explicitly chosen candidate index; tables retain all comparisons.
+Verify offline before the bounded live run. No key is written to the notebook.
+
+User's subsequent folder question is a layout review, not authorization to merge
+files in this increment. Co-locating matching mechanism/view classes is reasonable,
+while preserving their interfaces: mechanism owns consequences, view exposes a
+read-only solver capability, and runtime owns execution. Individual run values,
+information choices, and actor instructions remain configuration rather than
+hardcoded mechanism implementation. Reusable demand/cost/profit models and generic
+solvers/optimizers should stay reusable even if domain-specific files are co-located.
+
+
+Differentiated implementation verification: 129 tests passed (one opt-in live
+pytest skipped); mypy and Ruff passed. Both offline and live notebooks executed.
+With illustrative inputs the live Contributor model chose prices (2.30,2.50),
+compared with one numerical candidate (2.349056,2.528764). Candidate gains checked
+around 1e-13; estimated LLM-profile unilateral gains were (0.328590,0.031705).
+These are results for synthetic input values, not a uniqueness proof or empirical
+forecast. Failed stationary points are retained in diagnostics. After an initial
+incomplete response, the differentiated example records minimal reasoning effort
+and a 4,000-output-token cap; sanitized incomplete reasons and usage are logged.
+Only complete valid action batches commit. No earlier notebook is rerun or replaced.
+
+## 20. Accepted component co-location and shared-building-block layout
+
+Move NormalFormGameView, BertrandGameView, and DifferentiatedBertrandGameView into
+their corresponding modules under components.mechanisms. Keep the classes and their
+abstract contracts distinct; co-location does not give solvers commit authority.
+Remove components.games and update imports. The trusted runtime owns the execution
+loop; mechanisms own consequences and transition proposals; views expose isolated
+payoff/optimization capabilities.
+
+Group shared implementations under components.common.economics (economic model
+primitives and segmented logit) and components.common.math (generic scalar numerical
+optimization). These are reusable classes/models/algorithms, not an undifferentiated
+collection of helper functions. Preserve the model-agnostic dependency direction:
+math routines receive objectives/bounds and do not import market mechanisms or
+actor policies. Game-level solution concepts remain in components.solvers; abstract
+contracts remain in simulation_core. Per-run values, permissions, actor instructions,
+and assumptions remain typed configuration. No component IDs or JSON contracts change.
+
+Update source/tests/docs/notebook imports. Verify all tests, lint, types, and all
+notebook code paths with fake gateways; preserve prior live notebook outputs and
+make no new API calls for this structural refactor. Do not retain legacy import shims
+for this internal package reorganization.

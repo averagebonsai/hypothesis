@@ -277,3 +277,29 @@ def test_multiple_action_kinds_use_their_own_payload_schemas():
     )
     obs = observation().model_copy(update={"allowed_action_kinds": ("choose_move", "measure")})
     assert instance.choose_action(obs).action.payload == {"value": 3.0}
+
+
+def test_incomplete_provider_usage_and_reason_are_preserved(monkeypatch):
+    from components.gateways import openai
+
+    request = provider_request()
+    data = {
+        "id": "incomplete-test",
+        "status": "incomplete",
+        "incomplete_details": {"reason": "max_output_tokens"},
+        "usage": {"input_tokens": 100, "output_tokens": 2000},
+        "output": [],
+    }
+    monkeypatch.setattr(openai, "urlopen", lambda *a, **k: io.BytesIO(json.dumps(data).encode()))
+    gateway = OpenAIResponsesGateway("test-secret", frozenset({request.model}))
+    instance = LLMPolicy(
+        {"model": request.model, "instructions": "choose", "max_attempts": 1},
+        gateway,
+        {"choose_move": MovePayload},
+    )
+    with pytest.raises(LLMPolicyError) as error:
+        instance.choose_action(observation())
+    record = error.value.records[-1]
+    assert record.error_category == "provider_incomplete_max_output_tokens"
+    assert record.request_id == "incomplete-test"
+    assert record.input_tokens == 100 and record.output_tokens == 2000

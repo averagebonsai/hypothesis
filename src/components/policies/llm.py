@@ -1,6 +1,7 @@
 """Generic schema-constrained actor policy; no economic equations or world access."""
 
 import json
+import logging
 from functools import reduce
 from operator import or_
 from typing import Annotated, Literal
@@ -106,6 +107,7 @@ class LLMPolicy(Policy):
                     "decision rationale citing relevant observed facts, the objective, and any "
                     "assumptions about other actors. Do not claim knowledge of simultaneous "
                     "uncommitted choices. Provide a brief explanation, not internal reasoning. "
+                    "Write simply, as if explaining to an undergraduate student."
                     "JSON update values are "
                     "encoded as value_json strings. " + self.parameters.instructions
                 ),
@@ -122,6 +124,7 @@ class LLMPolicy(Policy):
             response = None
             status: Literal["accepted", "invalid_response", "gateway_error"] = "gateway_error"
             error = None
+            error_metadata: GatewayError | None = None
             decision = None
             try:
                 response = self.gateway.complete(request)
@@ -142,6 +145,7 @@ class LLMPolicy(Policy):
                 status = "accepted"
             except GatewayError as exc:
                 error = str(exc)
+                error_metadata = exc
             except (ValueError, ValidationError):
                 decision = None
                 status = "invalid_response"
@@ -156,13 +160,31 @@ class LLMPolicy(Policy):
                     rationale=None if decision is None else decision.rationale,
                     response_model=None if response is None else response.model,
                     response_text=None if response is None else response.text,
-                    request_id=None if response is None else response.request_id,
-                    input_tokens=0 if response is None else response.input_tokens,
-                    output_tokens=0 if response is None else response.output_tokens,
+                    request_id=(error_metadata.request_id if error_metadata else None)
+                    if response is None
+                    else response.request_id,
+                    input_tokens=(error_metadata.input_tokens if error_metadata else 0)
+                    if response is None
+                    else response.input_tokens,
+                    output_tokens=(error_metadata.output_tokens if error_metadata else 0)
+                    if response is None
+                    else response.output_tokens,
                     status=status,
                     error_category=error,
                 )
             )
             if decision is not None:
                 return decision
+            logging.getLogger("simulation.actions").info(
+                json.dumps(
+                    {
+                        "event": "policy_attempt_failed",
+                        "actor_id": observation.actor_id,
+                        "attempt": attempt,
+                        "error_category": error,
+                        "input_tokens": self.records[-1].input_tokens,
+                        "output_tokens": self.records[-1].output_tokens,
+                    }
+                )
+            )
         raise LLMPolicyError(self.model_calls())

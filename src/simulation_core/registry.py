@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -73,5 +74,5 @@ class ComponentRegistry:
         for component_id, parameters in selections:
             schema = self.parameter_schemas.get(component_id)
             if schema is not None:
-                schema.model_validate(parameters)
+                schema.model_validate_json(json.dumps(parameters, allow_nan=False))
         self.mechanisms[config.mechanism_id]().validate_config(config.world.model_copy(deep=True))

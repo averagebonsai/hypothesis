@@ -1,8 +1,7 @@
 from copy import deepcopy
 from itertools import product
 
-from components.games.normal_form import NormalFormGameView
-from components.mechanisms.normal_form import PayoffMatrixMechanism
+from components.mechanisms.normal_form import NormalFormGameView, PayoffMatrixMechanism
 from components.solvers.pure_nash import PureNashSolver
 from examples.llm_payoff_matrix import run_llm_job
 from examples.payoff_matrix import build_experiment

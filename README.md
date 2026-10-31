@@ -207,3 +207,202 @@ that defect yields a greater own payoff for either rival move. These are actual
 model responses; the older fake-gateway cooperate/defect result was hardcoded only
 inside examples.llm_payoff_matrix.fake_response. Flip USE_LIVE_API to False for
 that deterministic fixture; leaving it True makes billed API calls on re-execution.
+
+
+Homogeneous Bertrand experiment (M2.2 first increment)
+----------------------------------------------------
+
+`visualisations/bertrand.ipynb` compares live LLM prices, quantities, and profits
+against a certified textbook Bertrand–Nash equilibrium, with per-action rationales,
+continuous deviation-gain diagnostics, model-call metadata, and canonical replay.
+It is live by default; set USE_LIVE_API=False for the off-equilibrium fake fixture.
+The existing finite-game notebook is preserved separately.
+
+```python
+from examples.bertrand import BertrandExampleSettings, run_job, run_live_job
+settings = BertrandExampleSettings(a=100.0, b=1.0, marginal_cost=20.0,
+                                   price_lower=0.0, price_upper=100.0)
+artifact = run_job(settings)       # offline fake gateway: prices 30 and 25
+# artifact = run_live_job(settings)  # model and key from .env
+```
+
+The settings class creates a typed SimulationConfig; only temporary job JSON is
+written. Defaults are illustrative assumptions, not estimated market data. Both
+firms see Q(P)=max(a-bP,0), their own piecewise demand, both constant marginal costs,
+price bounds, and the timing/supply rules. The lower price captures all demand;
+exact ties split it equally. Prices are continuous, not rounded to cents. Selling
+below cost is allowed and correctly produces losses. Demand above the choke price
+is zero. Unlimited capacity and no fixed costs are explicit assumptions.
+
+Reusable economic interfaces live in simulation_core/economics.py: aggregate
+DemandModel, CostModel, ProfitModel, and AllocationRule. Components implement
+LinearDemand, ConstantMarginalCost, RevenueMinusCost, and LowestPriceAllocation.
+HomogeneousBertrandMechanism composes these and validates price actions, actor
+references, domain bounds, state history and outcome consistency. The allocation
+contract enforces nonnegative quantities and conservation. The mechanism supports
+arbitrary firm IDs and at least two firms; the textbook benchmark deliberately
+certifies only two identical-cost firms with positive demand at feasible cost.
+The trusted runtime and generic LLMPolicy have no Bertrand-specific branches.
+
+GameView now separates finite enumeration (FiniteGameView) from a continuous
+best-response oracle (BestResponseGameView). PureNashSolver still enumerates finite
+games; TextbookBertrandSolver derives p_A=p_B=c and independently checks unilateral
+profit gains through a region-wise oracle using the mechanism's primitives. This
+is a Nash equilibrium, not monopoly/joint-profit maximization. The continuous
+benchmark has no finite profile count or numerical grid-convergence claim.
+
+Against some rival prices above cost, a firm can approach its best payoff by
+undercutting arbitrarily closely but no price attains it. BestResponseResult then
+reports a supremum, attained=False, no maximizing action, and a feasible nearby
+witness with its actual payoff. The gain is a supremum of unilateral improvement,
+not a claim that the witness achieves a mathematical maximum. Exact tie, strictly
+lower price, monopoly optimum, and zero-sales branches are evaluated separately.
+
+The analytical certificate reports unsupported outside its declared assumptions
+(e.g. asymmetric costs, a binding price floor above cost, or zero demand at cost).
+It does not claim that no equilibrium exists. Actor runs retain their independent
+status. Shared benchmark comparisons now include numeric action deltas and scalar
+metric deltas, as well as full observed/equilibrium outcomes and payoff differences.
+
+Acceptance tests cover piecewise allocation/profits, zero-demand truncation,
+exact ties, losses below cost, own-price demand monotonicity, invalid price/schema
+rejection before transition, fresh worlds, evaluation purity, analytical results
+across parameters, supremum nonattainment, independent dense-grid lower checks,
+arbitrary IDs/multifirm allocation, privacy, simultaneous observations, rationales,
+canonical replay, benchmark purity, and explicit unsupported cases. Dense grids
+are tests/illustrations only; they do not define the benchmark or its price domain.
+Differentiated Bertrand remains deferred until requested.
+
+
+Saved Bertrand live result: muse-spark-1.3-contributor independently chose price 20
+for each firm. Each sold 40 units and earned zero profit, exactly matching the
+separate analytical benchmark. Both first-attempt responses included rationales.
+This is one synthetic model run, not a calibrated market prediction.
+
+
+Differentiated Bertrand with user inputs
+---------------------------------------
+
+Open `visualisations/differentiated_bertrand.ipynb`. Its editable input cell uses
+`DifferentiatedBertrandInputs`, `FirmInput`, and `ConsumerSegment` Pydantic classes.
+Replace the illustrative numbers and set INPUT_SOURCE="user", or deserialize a
+user input with `DifferentiatedBertrandInputs.model_validate_json(...)`. Required
+costs, bounds, populations, price sensitivities, and per-firm utilities are not
+invented. An omitted outside utility defaults to zero and is explicitly recorded.
+Utilities are dimensionless; price sensitivities are per price unit. Consumer
+segments are aggregate demand parameters, not separate LLM survey respondents.
+
+```python
+from examples.differentiated_bertrand import (
+    DifferentiatedBertrandInputs, FirmInput, ConsumerSegment, run_job, run_live_job,
+)
+from components.mechanisms.bertrand import PriceDomain
+
+inputs = DifferentiatedBertrandInputs(
+    firms=(FirmInput(id="A", marginal_cost=1.0, price_domain=PriceDomain(upper=10.0)),
+           FirmInput(id="B", marginal_cost=1.2, price_domain=PriceDomain(upper=10.0))),
+    segments=(ConsumerSegment(id="customers", population=300.0,
+                 price_sensitivity=1.0, utilities={"A": 3.0, "B": 3.2}),),
+)
+artifact = run_job(inputs)       # fake model, real numerical benchmark
+# artifact = run_live_job(inputs)  # credentials/model from .env
+```
+
+The user-input compiler records mapped supplied values in ExperimentRequest and
+creates the validated SimulationConfig; job manifests are temporary. Numeric
+illustrations are marked as defaults. Model assumptions, outside-option
+normalization, numerical tolerances, and information defaults are separately
+recorded. A complete per-firm permissions mapping can override complete public
+information. The mathematical benchmark still assumes complete information; a
+restricted actor's deviations do not, by themselves, establish irrationality.
+
+Reusable DemandSystem and DifferentiableDemandSystem parents accept a joint price
+profile. SegmentedLogitDemand computes shares using maximum-centered exponentials,
+including the outside option in normalization. Each segment's shares sum to one;
+firm quantities plus outside quantity conserve population. Costs/profits, price
+schemas, protocols, LLM policies, traces, and execution infrastructure are reused.
+The mechanism owns demand/profit calculations and their own-price derivatives;
+optimizers never copy these economic equations.
+
+DifferentiableScalarGameView is a solver-facing capability for one bounded scalar
+action per player. NumericalNashSolver is independent of logit or Bertrand: it uses
+multistart bounded projected-gradient roots, then checks payoff deviations with
+uniform/geometric samples and local refinements plus independent SHGO searches.
+If roots fail, a bounded damped best-response fallback is attempted. Each objective
+has a hard evaluation budget. All distinct candidates found are retained, with
+payoff/price tolerances, method attempts, residuals, gains, and price-bound flags.
+`certification="numerical"` marks both solver and best-response results. These
+best-found values are estimates, not rigorous global-optimality certificates.
+A single found candidate is not a proof of uniqueness; failure/budget exhaustion
+is not a proof that equilibrium does not exist. Primary actor runs remain separate.
+
+The input class exposes typed benchmark settings for tighter tolerances or larger
+search budgets. Prices beyond feasible bounds, invalid dimensions, duplicate IDs,
+nonpositive sensitivities/populations, and nonfinite data fail validation. Extreme
+utilities are handled without exponent overflow. JSON-transport validation now
+handles tuple-backed Pydantic array fields correctly, without relaxing scalar types.
+
+The notebook shows editable inputs, primary LLM prices/rationales, every found
+numerical comparison, prices/quantities/profits, segment/outside shares, search
+qualifications, call metadata, replay, and assumptions. It makes bounded live calls
+by default (two firms, at most two attempts each, 4,000 output tokens per response).
+Set USE_LIVE_API=False for offline execution. The illustrative data is not a
+calibrated empirical market or a prediction of human behavior.
+
+Numerical API references: [bounded least squares](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html),
+[local scalar minimization](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize_scalar.html),
+and [SHGO](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html).
+
+
+Saved differentiated live result (illustrative inputs): muse-spark-1.3-contributor
+chose prices A=2.30 and B=2.50. The retained numerical Nash candidate prices are
+approximately A=2.349056 and B=2.528764, with per-firm unilateral gain checks around
+1e-13 at the candidate. Estimated unilateral gains at the LLM profile are about
+0.328590 and 0.031705. Model actions remain primary and are not overwritten.
+
+An initial live attempt returned an incomplete response at the shorter budget.
+The differentiated example now explicitly uses minimal reasoning effort and a
+4,000-token response cap, with at most two attempts per firm. Incomplete responses
+retain sanitized reason, request ID, and token usage; rejected attempts are emitted
+as structured diagnostic log entries. Only accepted, fully validated batches commit.
+The successful saved run used one accepted request per firm. No private internal
+reasoning is requested or exposed; the visible rationale is the model's stated
+explanation. Credential values are excluded from configuration and notebook outputs.
+
+
+Component layout
+----------------
+
+```text
+src/components/
+  common/
+    economics/
+      models.py             # Linear demand, costs, profit, lowest-price allocation
+      segmented_logit.py    # Differentiated demand system and segment schema
+    math/
+      scalar.py             # Bounded scalar optimization, budgets and diagnostics
+  mechanisms/
+    normal_form.py          # Parameters, mechanism, and NormalFormGameView
+    bertrand.py             # Parameters, mechanism, and BertrandGameView
+    differentiated_bertrand.py  # Parameters, mechanism, and its game view
+    recording.py
+  solvers/                  # Game-level solution concepts and search procedures
+  policies/
+  protocols/
+  gateways/
+  library.py
+```
+
+A mechanism and its corresponding solver view are co-located, retaining separate
+classes and interfaces. Mechanisms evaluate consequences and propose transitions;
+game views expose isolated solver-facing capabilities; SimulationRuntime owns the
+execution loop and commits. User-run values and actor instructions remain typed
+configuration. The former components.games package is removed.
+
+The common parent groups reusable implementations with explicit purposes rather
+than a catch-all utilities module: economics contains domain models and allocation
+rules, while math contains numerical routines that know nothing about actors or
+economic assumptions. Game-theory solvers stay in solvers because they implement
+solution concepts using game views. Abstract economic and solver contracts remain
+in simulation_core. Component IDs and JSON job formats are unchanged. Restart
+existing notebook kernels after updating imports; saved live outputs are preserved.

@@ -269,3 +269,19 @@ assumptions, and temporary jobs. Sections 15–16 describe accepted M2.1 (generi
 finite-game benchmark), implemented and tested offline with an opt-in live adapter.
 Live verification awaits key/model configuration. Original economic/numerical
 work follows as M2.2.
+
+
+Readable plan section 18 specifies M2.2's homogeneous Bertrand increment: reusable
+aggregate demand/allocation/cost/profit primitives, continuous best-response
+capabilities, textbook marginal-cost benchmark, acceptance checks, and the live
+bertrand.ipynb demonstration. Differentiated Bertrand is explicitly deferred.
+
+
+Readable plan section 19 records differentiated Bertrand: typed firm/segment user
+inputs, stable segmented logit with outside option, general joint-demand and
+scalar-gradient interfaces, a qualified multistart numerical Nash benchmark,
+acceptance checks, and the live differentiated_bertrand.ipynb demonstration.
+
+Readable plan section 20 supersedes the old component tree: model-specific views
+are co-located with mechanisms, and reusable implementations are grouped under
+components.common.economics and components.common.math.
