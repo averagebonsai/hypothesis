@@ -1,0 +1,56 @@
+{
+  "hypothesis": "What outcomes arise when A cooperates and B defects in this payoff-matrix game?",
+  "supplied_inputs": [
+    {
+      "name": "payoff table",
+      "value": [
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 3.0,
+            "B": 3.0
+          }
+        },
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 0.0,
+            "B": 5.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 5.0,
+            "B": 0.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 1.0,
+            "B": 1.0
+          }
+        }
+      ],
+      "target_path": "/world/parameters/cells",
+      "source_reference": "Deterministic example fixture"
+    }
+  ],
+  "requirements": [
+    "Use the supplied payoff table.",
+    "Run both actors simultaneously."
+  ]
+}

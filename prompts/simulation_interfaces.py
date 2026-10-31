@@ -1,5 +1,19 @@
 """Reference interface contract for a composable simulation engine.
 
+SUPERSEDED IN PART by simulation_implementation_plan_readable.md sections 12–14.
+Implemented M1 abstract parents and models live under src/simulation_core.
+Observation projection is trusted core code, not a protocol method. Outcomes
+may omit payoffs; mechanisms validate their domain-specific invariants.
+Component factories accept declared configuration and create fresh instances.
+ExperimentRequest and structured Assumption are implemented; execution.py defines
+a JobManifest, JobRunner, ExecutionBackend, and trusted LocalBackend with temporary
+JSON transport and cleanup. The older execution/assumption shapes below are proposals. In particular, memory
+is nested in private state; Policy returns Decision(action, memory_update);
+protocol/runtime own phase/tick; transition returns domain changes; canonical
+events contain committed snapshots. Generic Solver/GameView parents now live in simulation_core/solver.py;
+complete-information finite-game pure-Nash benchmarks are implemented. Older
+solver shapes below remain proposals for later continuous/private-information work.
+
 This is intentionally a SINGLE review artifact. Split it at the FILE BOUNDARY
 markers into the suggested modules before implementing. The contracts are
 Python 3.12+ and use Pydantic v2. Concrete implementations are out of scope.

@@ -1,0 +1,255 @@
+{
+  "world": {
+    "actors": [
+      {
+        "id": "north",
+        "kind": "sensor",
+        "action_space": {
+          "schemas": {
+            "submit_measurement": "number.v1"
+          }
+        },
+        "policy_id": "scripted.v1",
+        "policy_parameters": {
+          "kind": "submit_measurement",
+          "payload": {
+            "value": 21.5
+          },
+          "memory_update": {
+            "submitted": true
+          },
+          "private_updates": {
+            "calibrated": true
+          },
+          "required_fields": [
+            "instructions"
+          ]
+        }
+      },
+      {
+        "id": "south",
+        "kind": "sensor",
+        "action_space": {
+          "schemas": {
+            "submit_measurement": "number.v1"
+          }
+        },
+        "policy_id": "scripted.v1",
+        "policy_parameters": {
+          "kind": "submit_measurement",
+          "payload": {
+            "value": 19.0
+          },
+          "memory_update": {
+            "submitted": true
+          },
+          "private_updates": {
+            "calibrated": true
+          },
+          "required_fields": [
+            "instructions"
+          ]
+        }
+      },
+      {
+        "id": "west",
+        "kind": "sensor",
+        "action_space": {
+          "schemas": {
+            "submit_measurement": "number.v1"
+          }
+        },
+        "policy_id": "scripted.v1",
+        "policy_parameters": {
+          "kind": "submit_measurement",
+          "payload": {
+            "value": 20.0
+          },
+          "memory_update": {
+            "submitted": true
+          },
+          "private_updates": {
+            "calibrated": true
+          },
+          "required_fields": [
+            "instructions"
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "records_field": "readings",
+      "count_metric": "received"
+    },
+    "initial_public_state": {
+      "instructions": "Record the configured numeric measurement.",
+      "readings": [],
+      "internal_note": "not observable"
+    },
+    "initial_private_state": {
+      "north": {
+        "facts": {
+          "calibration_secret": "north",
+          "calibrated": false
+        }
+      },
+      "south": {
+        "facts": {
+          "calibration_secret": "south",
+          "calibrated": false
+        }
+      },
+      "west": {
+        "facts": {
+          "calibration_secret": "west",
+          "calibrated": false
+        }
+      }
+    }
+  },
+  "mechanism_id": "recording.v1",
+  "protocol_id": "simultaneous.v1",
+  "protocol_parameters": {
+    "rounds": 2
+  },
+  "permissions": {
+    "north": {
+      "public_fields": [
+        "instructions",
+        "readings"
+      ],
+      "private_fields": [
+        "calibration_secret",
+        "calibrated"
+      ],
+      "readable_memory": true,
+      "writable_private_fields": [
+        "calibrated"
+      ],
+      "writable_memory": true
+    },
+    "south": {
+      "public_fields": [
+        "instructions",
+        "readings"
+      ],
+      "private_fields": [
+        "calibration_secret",
+        "calibrated"
+      ],
+      "readable_memory": true,
+      "writable_private_fields": [
+        "calibrated"
+      ],
+      "writable_memory": true
+    },
+    "west": {
+      "public_fields": [
+        "instructions",
+        "readings"
+      ],
+      "private_fields": [
+        "calibration_secret",
+        "calibrated"
+      ],
+      "readable_memory": true,
+      "writable_private_fields": [
+        "calibrated"
+      ],
+      "writable_memory": true
+    }
+  },
+  "assumptions": [
+    {
+      "path": "/protocol_id",
+      "value": "simultaneous.v1",
+      "source": "default",
+      "rationale": "Collect all scripted sensor readings simultaneously."
+    },
+    {
+      "path": "/world/actors/0/policy_parameters/payload",
+      "value": {
+        "value": 21.5
+      },
+      "source": "default",
+      "rationale": "Fixed synthetic readings demonstrate schema validation; no physical measurement is made."
+    },
+    {
+      "path": "/world/actors/1/policy_parameters/payload",
+      "value": {
+        "value": 19.0
+      },
+      "source": "default",
+      "rationale": "Fixed synthetic readings demonstrate schema validation; no physical measurement is made."
+    },
+    {
+      "path": "/world/actors/2/policy_parameters/payload",
+      "value": {
+        "value": 20.0
+      },
+      "source": "default",
+      "rationale": "Fixed synthetic readings demonstrate schema validation; no physical measurement is made."
+    },
+    {
+      "path": "/permissions/north",
+      "value": {
+        "public_fields": [
+          "instructions",
+          "readings"
+        ],
+        "private_fields": [
+          "calibration_secret",
+          "calibrated"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [
+          "calibrated"
+        ],
+        "writable_memory": true
+      },
+      "source": "default",
+      "rationale": "Declare permitted public and own-private fields explicitly; no actor receives another actor’s private state."
+    },
+    {
+      "path": "/permissions/south",
+      "value": {
+        "public_fields": [
+          "instructions",
+          "readings"
+        ],
+        "private_fields": [
+          "calibration_secret",
+          "calibrated"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [
+          "calibrated"
+        ],
+        "writable_memory": true
+      },
+      "source": "default",
+      "rationale": "Declare permitted public and own-private fields explicitly; no actor receives another actor’s private state."
+    },
+    {
+      "path": "/permissions/west",
+      "value": {
+        "public_fields": [
+          "instructions",
+          "readings"
+        ],
+        "private_fields": [
+          "calibration_secret",
+          "calibrated"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [
+          "calibrated"
+        ],
+        "writable_memory": true
+      },
+      "source": "default",
+      "rationale": "Declare permitted public and own-private fields explicitly; no actor receives another actor’s private state."
+    }
+  ],
+  "schema_version": "simulation.config.v1"
+}

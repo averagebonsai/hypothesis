@@ -1,0 +1,6 @@
+{
+  "hypothesis": "Can the same runtime record numeric submissions while preserving private state?",
+  "requirements": [
+    "Record measurements without defining economic payoffs."
+  ]
+}

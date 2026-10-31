@@ -1,9 +1,13 @@
 # Composable Simulation Compiler — Implementation Plan
 
-**Status:** Draft for human review, not an authorization to deploy.  
+**Status:** Supporting technical draft. The readable plan, including its accepted decisions and contradiction register, takes precedence. M1 is authorized for implementation; deployment is not in scope.  
 **Target:** Python 3.12+, `uv`, Pydantic v2, NumPy/SciPy for numerical economics.  
 **Companion:** [`simulation_interfaces.py`](simulation_interfaces.py) — the authoritative *proposed* interface sketch. Split it at its `FILE:` markers before implementation.  
 **Goal:** An LLM coding agent compiles natural-language hypotheses into validated simulations of strategic or behavioral actors. Support undergraduate microeconomics and turn-based market-feedback studies, including LLM-persona advertisement reception.
+
+## Current precedence and corrections
+
+See `simulation_implementation_plan_readable.md` sections 12–14 for accepted refinements: primary LLM actor runs with separate mathematical benchmarks; one action per active actor; private-state memory with typed own-memory proposals; explicit experiment permissions/default assumptions; protocol-owned progression; isolated snapshots; strict JSON/finite validation; canonical snapshot event replay; qualified solver statuses and bounded fallbacks. Its milestone scopes supersede the table below. Older technical details below are historical proposals where that section overrides them. Do not copy unused interfaces wholesale.
 
 ## 0. Decisions already made
 
@@ -258,3 +262,10 @@ Recommended restrictions: no network by default, non-root user, read-only root f
 ## 12. Coding agent instruction
 
 **Implement in milestones. Do not silently modify the architectural contracts.** First split `simulation_interfaces.py` at the marked boundaries and make the package importable. Replace placeholders only with reviewed, typed implementations. Write tests before adding new economic models. Keep `SimulationRuntime` experiment-agnostic. Prefer `uv run`/`uv sync`, never `pip`. Treat scientific assumptions as explicit configuration and generated Python as untrusted. When a design decision is unresolved, document it and request human review rather than inventing hidden defaults.
+
+
+The readable plan section 14 defines request/resolved-spec contracts, structured
+assumptions, and temporary jobs. Sections 15–16 describe accepted M2.1 (generic LLM policies and a separate
+finite-game benchmark), implemented and tested offline with an opt-in live adapter.
+Live verification awaits key/model configuration. Original economic/numerical
+work follows as M2.2.

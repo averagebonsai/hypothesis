@@ -1,0 +1,233 @@
+{
+  "world": {
+    "actors": [
+      {
+        "id": "A",
+        "kind": "player",
+        "action_space": {
+          "schemas": {
+            "choose_move": "move.v1"
+          }
+        },
+        "policy_id": "scripted.v1",
+        "policy_parameters": {
+          "kind": "choose_move",
+          "payload": {
+            "move": "cooperate"
+          },
+          "memory_update": {
+            "last_move": "cooperate"
+          }
+        }
+      },
+      {
+        "id": "B",
+        "kind": "player",
+        "action_space": {
+          "schemas": {
+            "choose_move": "move.v1"
+          }
+        },
+        "policy_id": "scripted.v1",
+        "policy_parameters": {
+          "kind": "choose_move",
+          "payload": {
+            "move": "defect"
+          },
+          "memory_update": {
+            "last_move": "defect"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "choices": {
+        "A": [
+          "cooperate",
+          "defect"
+        ],
+        "B": [
+          "cooperate",
+          "defect"
+        ]
+      },
+      "cells": [
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 3.0,
+            "B": 3.0
+          }
+        },
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 0.0,
+            "B": 5.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 5.0,
+            "B": 0.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 1.0,
+            "B": 1.0
+          }
+        }
+      ],
+      "action_kind": "choose_move",
+      "history_field": "history",
+      "payoffs_field": "payoffs"
+    },
+    "initial_public_state": {
+      "history": []
+    }
+  },
+  "mechanism_id": "normal_form.v1",
+  "protocol_id": "simultaneous.v1",
+  "protocol_parameters": {
+    "rounds": 1
+  },
+  "permissions": {
+    "A": {
+      "public_fields": [
+        "history",
+        "payoffs"
+      ],
+      "private_fields": [],
+      "readable_memory": true,
+      "writable_private_fields": [],
+      "writable_memory": true
+    },
+    "B": {
+      "public_fields": [
+        "history",
+        "payoffs"
+      ],
+      "private_fields": [],
+      "readable_memory": true,
+      "writable_private_fields": [],
+      "writable_memory": true
+    }
+  },
+  "assumptions": [
+    {
+      "path": "/world/parameters/cells",
+      "value": [
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 3.0,
+            "B": 3.0
+          }
+        },
+        {
+          "moves": {
+            "A": "cooperate",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 0.0,
+            "B": 5.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "cooperate"
+          },
+          "payoffs": {
+            "A": 5.0,
+            "B": 0.0
+          }
+        },
+        {
+          "moves": {
+            "A": "defect",
+            "B": "defect"
+          },
+          "payoffs": {
+            "A": 1.0,
+            "B": 1.0
+          }
+        }
+      ],
+      "source": "user",
+      "rationale": "The example request supplies this payoff table; the numbers are not empirically calibrated."
+    },
+    {
+      "path": "/protocol_id",
+      "value": "simultaneous.v1",
+      "source": "textbook",
+      "rationale": "A normal-form game uses simultaneous choices."
+    },
+    {
+      "path": "/world/actors/0/policy_parameters/payload",
+      "value": {
+        "move": "cooperate"
+      },
+      "source": "default",
+      "rationale": "Use a deterministic scripted decision as a development fixture, before introducing LLM actors."
+    },
+    {
+      "path": "/world/actors/1/policy_parameters/payload",
+      "value": {
+        "move": "defect"
+      },
+      "source": "default",
+      "rationale": "Use a deterministic scripted decision as a development fixture, before introducing LLM actors."
+    },
+    {
+      "path": "/permissions/A",
+      "value": {
+        "public_fields": [
+          "history",
+          "payoffs"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "source": "default",
+      "rationale": "Declare permitted public and own-private fields explicitly; no actor receives another actor’s private state."
+    },
+    {
+      "path": "/permissions/B",
+      "value": {
+        "public_fields": [
+          "history",
+          "payoffs"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "source": "default",
+      "rationale": "Declare permitted public and own-private fields explicitly; no actor receives another actor’s private state."
+    }
+  ],
+  "schema_version": "simulation.config.v1"
+}
