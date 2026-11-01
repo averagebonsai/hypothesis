@@ -167,6 +167,7 @@ class SimulationConfig(FrozenModel):
     protocol_id: str
     protocol_parameters: dict[str, JsonValue] = Field(default_factory=dict)
     permissions: dict[str, ObservationPermissions] = Field(default_factory=dict)
+    phase_permissions: dict[str, dict[str, ObservationPermissions]] = Field(default_factory=dict)
     benchmark: BenchmarkSpec | None = None
     max_steps: int = Field(default=100, gt=0)
     assumptions: tuple[Assumption, ...] = ()
@@ -175,6 +176,9 @@ class SimulationConfig(FrozenModel):
     def permission_references(self) -> Self:
         if set(self.permissions) - {actor.id for actor in self.world.actors}:
             raise ValueError("Unknown actor in permissions")
+        for phase, permissions in self.phase_permissions.items():
+            if not phase or set(permissions) - {actor.id for actor in self.world.actors}:
+                raise ValueError("Unknown actor or empty phase in phase permissions")
         from .provenance import resolve_pointer, same_json
 
         paths = [assumption.path for assumption in self.assumptions]

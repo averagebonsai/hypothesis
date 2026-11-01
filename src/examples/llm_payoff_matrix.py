@@ -3,12 +3,10 @@
 import json
 from importlib.resources import files
 
-from components.gateways.meta import MetaResponsesGateway
-from components.gateways.openai import OpenAIResponsesGateway
-from components.gateways.settings import LiveModelSettings
-from components.library import standard_registry
-from simulation_core.execution import JobResult, JobRunner, LocalBackend
-from simulation_core.model_gateway import BoundedGateway, FakeGateway, ModelGateway, ModelRequest
+from components.gateways.live import configured_gateway
+from components.jobs import run_model_job
+from simulation_core.execution import JobResult
+from simulation_core.model_gateway import FakeGateway, ModelGateway, ModelRequest
 from simulation_core.request import ExperimentRequest
 from simulation_core.types import Assumption, BenchmarkSpec, SimulationConfig
 
@@ -117,7 +115,6 @@ def run_llm_job(
     max_profiles: int = 10000,
 ) -> JobResult:
     transport = gateway if gateway is not None else FakeGateway(fake_response)
-    bounded = BoundedGateway(transport, max_calls=8, max_output_tokens_per_call=1200)
     config = build_llm_experiment(model, rounds, max_profiles)
     fixture = ExperimentRequest.model_validate_json(
         files("examples").joinpath("configs/prisoners_dilemma_request.json").read_text()
@@ -127,16 +124,12 @@ def run_llm_job(
             "hypothesis": "What moves do the configured LLM policies choose, and how do they deviate from pure Nash?"
         }
     )
-    return JobRunner(LocalBackend(standard_registry(bounded))).run(request, config)
+    return run_model_job(request, config, transport, max_calls=8, max_output_tokens_per_call=1200)
 
 
 def run_live_job(model: str | None = None) -> JobResult:
-    settings = LiveModelSettings.load(model)
-    gateway_type = (
-        MetaResponsesGateway if settings.model.startswith("muse-") else OpenAIResponsesGateway
-    )
-    gateway = gateway_type(settings.api_key.get_secret_value(), frozenset({settings.model}))
-    return run_llm_job(settings.model, gateway)
+    selected, gateway = configured_gateway(model)
+    return run_llm_job(selected, gateway)
 
 
 if __name__ == "__main__":

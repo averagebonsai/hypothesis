@@ -12,6 +12,8 @@ class BertrandBenchmarkParameters(FrozenModel):
 
 
 class TextbookBertrandSolver(Solver):
+    required_game_type = BertrandGameView
+
     def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         settings = BertrandBenchmarkParameters.model_validate(parameters)
         if not isinstance(game, BertrandGameView):

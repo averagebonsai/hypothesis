@@ -2,11 +2,16 @@
 
 import hashlib
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, JsonValue
 
-from .solver import BestResponseGameView, BestResponseResult, SolveResult, deviation_regrets
+from .solver import (
+    BestResponseResult,
+    SequentialGameView,
+    SolveResult,
+    deviation_regrets,
+)
 from .types import Action, FrozenModel, RunResult, SimulationConfig
 
 if TYPE_CHECKING:
@@ -42,6 +47,10 @@ class BenchmarkReport(FrozenModel):
     comparison_tick: int | None = None
     result: SolveResult
     observed_actions: tuple[Action, ...] = ()
+    observed_source_ticks: dict[str, int] = Field(default_factory=dict)
+    comparison_status: Literal["complete", "incomplete", "unavailable"] = "complete"
+    deviation_interpretations: dict[str, str] = Field(default_factory=dict)
+    strategic_diagnostics: dict[str, JsonValue] = Field(default_factory=dict)
     observed_regrets: dict[str, float] = Field(default_factory=dict)
     observed_best_responses: dict[str, BestResponseResult] = Field(default_factory=dict)
     comparisons: tuple[EquilibriumComparison, ...] = ()
@@ -65,7 +74,7 @@ class BenchmarkRunner:
             raise ValueError("No benchmark configured")
         try:
             tick = spec.comparison_tick or run.final_state.tick
-            event = next(
+            next(
                 event
                 for event in run.events
                 if event.kind == "committed" and event.state.tick == tick
@@ -75,6 +84,7 @@ class BenchmarkRunner:
             game = self.registry.game_views[spec.game_view_id](
                 config.model_copy(deep=True), previous.model_copy(deep=True), mechanism
             )
+            observed_profile = game.observed_profile(run.events, tick)
             solver = self.registry.solvers[spec.solver_id]()
             solved = solver.solve(game, dict(spec.parameters))
             if solved.status in {"failed", "budget_exhausted", "unsupported"}:
@@ -82,12 +92,21 @@ class BenchmarkRunner:
                     config_sha256=digest,
                     comparison_tick=tick,
                     result=solved,
-                    observed_actions=event.actions,
+                    observed_actions=observed_profile.actions,
+                    observed_source_ticks=observed_profile.source_ticks,
+                    comparison_status="unavailable",
                 )
-            by_actor = {action.actor_id: action for action in event.actions}
-            if set(by_actor) != set(game.actor_ids()):
-                raise ValueError("Benchmark requires a complete joint action profile")
-            profile = tuple(by_actor[aid] for aid in game.actor_ids())
+            if not observed_profile.complete:
+                return BenchmarkReport(
+                    config_sha256=digest,
+                    comparison_tick=tick,
+                    result=solved,
+                    observed_actions=observed_profile.actions,
+                    observed_source_ticks=observed_profile.source_ticks,
+                    comparison_status="incomplete",
+                )
+            profile = observed_profile.actions
+            by_actor = {action.actor_id: action for action in profile}
             observed = game.evaluate(profile)
             comparisons = []
             for index, equilibrium in enumerate(solved.equilibria):
@@ -109,17 +128,23 @@ class BenchmarkRunner:
                         },
                     )
                 )
-            responses = (
-                {aid: game.best_response(aid, profile) for aid in game.actor_ids()}
-                if isinstance(game, BestResponseGameView)
-                else {}
+            responses = solver.best_responses(game, profile, dict(spec.parameters))
+            strategic = (
+                game.strategic_deviations(profile, solved.equilibria)
+                if isinstance(game, SequentialGameView) and solved.equilibria
+                else None
             )
             return BenchmarkReport(
                 config_sha256=digest,
                 comparison_tick=tick,
                 result=solved,
                 observed_actions=profile,
-                observed_regrets={aid: response.gain for aid, response in responses.items()}
+                observed_source_ticks=observed_profile.source_ticks,
+                deviation_interpretations=strategic.interpretations if strategic else {},
+                strategic_diagnostics=strategic.details if strategic else {},
+                observed_regrets=strategic.gains
+                if strategic
+                else {aid: response.gain for aid, response in responses.items()}
                 if responses
                 else deviation_regrets(game, profile),
                 observed_best_responses=responses,
@@ -129,6 +154,7 @@ class BenchmarkRunner:
             # Numerical/adapter failures are separate from the completed primary actor run.
             return BenchmarkReport(
                 config_sha256=digest,
+                comparison_status="unavailable",
                 result=SolveResult(
                     status="failed", diagnostics={"error_category": type(exc).__name__}
                 ),

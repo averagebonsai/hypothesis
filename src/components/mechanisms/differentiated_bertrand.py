@@ -3,12 +3,14 @@
 from collections.abc import Sequence
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from components.common.economics.models import ConstantMarginalCost, RevenueMinusCost
 from components.common.economics.segmented_logit import SegmentedLogitDemand
-from components.common.math.scalar import ScalarSearchSettings, maximize_scalar
+from components.common.math.scalar import ScalarSearchSettings
 from components.mechanisms.bertrand import PriceDomain, PricePayload
+from components.solvers.response import scalar_best_response
+from simulation_core.game_view import MechanismGameView
 from simulation_core.mechanism import Mechanism
 from simulation_core.solver import BestResponseResult, DifferentiableScalarGameView
 from simulation_core.types import (
@@ -43,6 +45,12 @@ class DifferentiatedBertrandParameters(FrozenModel):
 
 
 class DifferentiatedBertrandMechanism(Mechanism):
+    requires_joint_actions = True
+
+    def required_action_schemas(self, config: WorldConfig) -> dict[str, dict[str, type[BaseModel]]]:
+        params = DifferentiatedBertrandParameters.from_json_values(config.parameters)
+        return {actor.id: {params.action_kind: PricePayload} for actor in config.actors}
+
     def __init__(self) -> None:
         self.profit = RevenueMinusCost()
         self._cached_parameters: DifferentiatedBertrandParameters | None = None
@@ -170,18 +178,14 @@ class DifferentiatedBertrandMechanism(Mechanism):
                 raise ValueError("Stored outcome disagrees with committed prices")
 
 
-class DifferentiatedBertrandGameView(DifferentiableScalarGameView):
+class DifferentiatedBertrandGameView(MechanismGameView, DifferentiableScalarGameView):
+    mechanism: DifferentiatedBertrandMechanism
+
     def __init__(self, config: SimulationConfig, state: WorldState, mechanism: Mechanism) -> None:
         if not isinstance(mechanism, DifferentiatedBertrandMechanism):
             raise TypeError("Differentiated pricing view requires its corresponding mechanism")
-        self.config = config.model_copy(deep=True)
-        self.state = state.model_copy(deep=True)
-        self.mechanism = mechanism
-        self.mechanism.validate_config(self.config.world)
-        self.parameters = self.mechanism.parameters(self.config.world)
-
-    def actor_ids(self) -> tuple[str, ...]:
-        return tuple(actor.id for actor in self.config.world.actors)
+        super().__init__(config, state, mechanism)
+        self.parameters = mechanism.parameters(self.config.world)
 
     def action_bounds(self, actor_id: str) -> tuple[float, float]:
         domain = self.parameters.price_domains[actor_id]
@@ -192,13 +196,6 @@ class DifferentiatedBertrandGameView(DifferentiableScalarGameView):
 
     def action_value(self, action: Action) -> float:
         return PricePayload.model_validate(action.payload).price
-
-    def evaluate(self, profile: Sequence[Action]) -> Outcome:
-        return self.mechanism.evaluate(
-            self.config.world.model_copy(deep=True),
-            self.state.model_copy(deep=True),
-            tuple(action.model_copy(deep=True) for action in profile),
-        )
 
     def own_payoff_gradient(self, profile: Sequence[Action]) -> dict[str, float]:
         return self.mechanism.own_profit_gradient(
@@ -211,36 +208,4 @@ class DifferentiatedBertrandGameView(DifferentiableScalarGameView):
         return sum(segment.population for segment in self.parameters.demand.segments)
 
     def best_response(self, actor_id: str, profile: Sequence[Action]) -> BestResponseResult:
-        baseline = self.evaluate(profile)
-        actions = {a.actor_id: a for a in profile}
-
-        def objective(value: float) -> float:
-            candidate = tuple(
-                self.scalar_action(aid, value) if aid == actor_id else actions[aid]
-                for aid in self.actor_ids()
-            )
-            return self.evaluate(candidate).payoffs[actor_id]
-
-        result = maximize_scalar(
-            objective,
-            self.action_bounds(actor_id),
-            ScalarSearchSettings(),
-            self.action_value(actions[actor_id]),
-        )
-        action = self.scalar_action(actor_id, result.value)
-        current = baseline.payoffs[actor_id]
-        return BestResponseResult(
-            actor_id=actor_id,
-            current_payoff=current,
-            supremum_payoff=result.payoff,
-            gain=max(0.0, result.payoff - current),
-            attained=True,
-            maximizing_action=action,
-            witness_action=action,
-            witness_payoff=result.payoff,
-            certification="numerical",
-            diagnostics={
-                **result.model_dump(mode="json"),
-                "qualification": "Best-found numerical payoff; no rigorous global-optimality certificate",
-            },
-        )
+        return scalar_best_response(self, actor_id, profile, ScalarSearchSettings())

@@ -49,31 +49,14 @@ class AllocationRule(ABC):
 
 
 class DemandSystemResult(FrozenModel):
+    """Joint demand quantities; particular models may add typed diagnostics."""
+
     quantities: dict[str, float]
-    segment_shares: dict[str, dict[str, float]]
-    outside_shares: dict[str, float]
-    outside_quantity: float = Field(ge=0)
-    total_population: float = Field(gt=0)
 
     @model_validator(mode="after")
-    def conservation(self) -> Self:
+    def nonnegative_quantities(self) -> Self:
         if any(q < 0 for q in self.quantities.values()):
             raise ValueError("Demand quantities must be nonnegative")
-        if set(self.segment_shares) != set(self.outside_shares):
-            raise ValueError("Every segment requires an outside share")
-        for sid, shares in self.segment_shares.items():
-            values = [*shares.values(), self.outside_shares[sid]]
-            if set(shares) != set(self.quantities) or any(not 0 <= value <= 1 for value in values):
-                raise ValueError("Invalid segment share dimensions or probabilities")
-            if not isclose(sum(values), 1.0, abs_tol=1e-12):
-                raise ValueError("Firm plus outside shares must sum to one")
-        if not isclose(
-            sum(self.quantities.values()) + self.outside_quantity,
-            self.total_population,
-            rel_tol=1e-12,
-            abs_tol=1e-12,
-        ):
-            raise ValueError("Firm and outside quantities must conserve population")
         return self
 
 
@@ -87,3 +70,10 @@ class DemandSystem(ABC):
 class DifferentiableDemandSystem(DemandSystem):
     @abstractmethod
     def own_price_derivatives(self, prices: Mapping[str, float]) -> dict[str, float]: ...
+
+
+class InverseDemandModel(ABC):
+    """Total supplied quantity determines the market-clearing price."""
+
+    @abstractmethod
+    def price(self, total_quantity: float) -> float: ...

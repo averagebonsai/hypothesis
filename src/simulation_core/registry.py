@@ -1,15 +1,23 @@
 import json
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, JsonValue
 
 from .mechanism import Mechanism
+from .observation import observe, permissions_for
 from .policy import Policy
 from .protocol import ProtocolRules
 from .request import ExperimentRequest
 from .solver import GameView, Solver
-from .types import SimulationConfig, WorldState
+from .types import Actor, SimulationConfig, WorldState
+from .validation import equivalent_payload_schema, initial_state
+
+
+class ComponentCompatibilityError(ValueError):
+    """Declared components cannot be safely composed; detected without actor calls."""
+
 
 type Parameters = dict[str, JsonValue]
 
@@ -39,6 +47,14 @@ class ComponentRegistry:
             "protocols": list(self.protocols),
             "solvers": list(self.solvers),
             "game_views": list(self.game_views),
+            "solver_requirements": {
+                key: (
+                    requirement.__name__
+                    if (requirement := factory().required_game_type)
+                    else "GameView"
+                )
+                for key, factory in self.solvers.items()
+            },
             "parameter_schemas": {
                 key: model.model_json_schema() for key, model in self.parameter_schemas.items()
             },
@@ -46,6 +62,17 @@ class ComponentRegistry:
                 key: model.model_json_schema() for key, model in self.action_schemas.items()
             },
         }
+
+    def create_policy(self, actor: Actor) -> Policy:
+        """Fresh policy with only that actor's declared schemas, without decisions."""
+        policy = self.policies[actor.policy_id](deepcopy(actor.policy_parameters))
+        policy.configure_action_schemas(
+            {
+                kind: self.action_schemas[schema_id]
+                for kind, schema_id in actor.action_space.schemas.items()
+            }
+        )
+        return policy
 
     def validate_ids(self, config: SimulationConfig) -> None:
         if config.mechanism_id not in self.mechanisms or config.protocol_id not in self.protocols:
@@ -75,4 +102,75 @@ class ComponentRegistry:
             schema = self.parameter_schemas.get(component_id)
             if schema is not None:
                 schema.model_validate_json(json.dumps(parameters, allow_nan=False))
-        self.mechanisms[config.mechanism_id]().validate_config(config.world.model_copy(deep=True))
+        mechanism = self.mechanisms[config.mechanism_id]()
+        mechanism.validate_config(config.world.model_copy(deep=True))
+
+        protocol = self.protocols[config.protocol_id](config.protocol_parameters)
+        protocol.validate_config(config.world.model_copy(deep=True))
+        if set(config.phase_permissions) - protocol.declared_phases():
+            raise ValueError("Unknown phase in observation permissions")
+
+        try:
+            mechanism.validate_schedule(
+                config.world.model_copy(deep=True),
+                protocol.decision_schedule(config.world.model_copy(deep=True)),
+            )
+            required = mechanism.required_action_schemas(config.world.model_copy(deep=True))
+            if set(required) - {actor.id for actor in config.world.actors}:
+                raise ValueError("Payload contract references unknown actors")
+            for actor in config.world.actors:
+                if actor.id in required and set(actor.action_space.schemas) != set(
+                    required[actor.id]
+                ):
+                    raise ValueError(
+                        f"Actor {actor.id} action kinds do not match the mechanism payload contract"
+                    )
+                for kind, schema in required.get(actor.id, {}).items():
+                    actual = self.action_schemas.get(actor.action_space.schemas.get(kind, ""))
+                    if actual is None or not equivalent_payload_schema(actual, schema):
+                        raise ValueError(
+                            f"Actor {actor.id} action {kind} requires payload schema {schema.__name__}"
+                        )
+            state = initial_state(config, protocol)
+            mechanism.validate_state(
+                config.world.model_copy(deep=True), state.model_copy(deep=True)
+            )
+            policies = {actor.id: self.create_policy(actor) for actor in config.world.actors}
+            schedule = protocol.decision_schedule(config.world.model_copy(deep=True))
+            if schedule is not None:
+                # Repeated rounds with the same phase need only one permission check.
+                checked = set()
+                for phase in schedule:
+                    for aid in phase.actor_ids:
+                        if aid not in policies:
+                            raise ValueError(f"Unknown scheduled actor {aid}")
+                        key = (phase.name, aid)
+                        if key in checked:
+                            continue
+                        checked.add(key)
+                        permissions = permissions_for(config, aid, phase.name)
+                        if policies[aid].required_observation_fields() - set(
+                            permissions.public_fields
+                        ):
+                            raise ValueError(
+                                f"Required observation fields unavailable for actor {aid} in phase {phase.name}"
+                            )
+            for aid in protocol.active_actor_ids(
+                config.world.model_copy(deep=True), state.model_copy(deep=True)
+            ):
+                actor = next(actor for actor in config.world.actors if actor.id == aid)
+                observation = observe(actor, state, permissions_for(config, aid, state.phase))
+                if policies[aid].required_observation_fields() - observation.visible.keys():
+                    raise ValueError(
+                        f"Required observation fields unavailable for actor {aid} initially"
+                    )
+            if config.benchmark is not None:
+                spec = config.benchmark
+                view = self.game_views[spec.game_view_id](
+                    config.model_copy(deep=True), state.model_copy(deep=True), mechanism
+                )
+                self.solvers[spec.solver_id]().validate_game(view)
+        except (TypeError, ValueError) as exc:
+            raise ComponentCompatibilityError(
+                f"Incompatible configuration for mechanism {config.mechanism_id}: {exc}"
+            ) from exc

@@ -18,12 +18,23 @@ from components.mechanisms.normal_form import (
     PayoffMatrixMechanism,
 )
 from components.mechanisms.recording import NumericPayload, RecordingMechanism, RecordingParameters
+from components.mechanisms.stackelberg import (
+    QuantityPayload,
+    StackelbergGameView,
+    StackelbergMechanism,
+    StackelbergParameters,
+)
 from components.policies.llm import LLMParameters, LLMPolicy
 from components.policies.scripted import ScriptedPolicy, ScriptParameters
+from components.protocols.sequential import SequentialParameters, SequentialProtocol
 from components.protocols.simultaneous import RoundParameters, SimultaneousProtocol
 from components.solvers.bertrand import BertrandBenchmarkParameters, TextbookBertrandSolver
 from components.solvers.numerical_nash import NumericalNashParameters, NumericalNashSolver
 from components.solvers.pure_nash import PureNashParameters, PureNashSolver
+from components.solvers.stackelberg import (
+    BackwardInductionParameters,
+    StackelbergBackwardInductionSolver,
+)
 from simulation_core.model_gateway import ModelGateway
 from simulation_core.registry import ComponentRegistry
 
@@ -33,18 +44,21 @@ def standard_registry(gateway: ModelGateway | None = None) -> ComponentRegistry:
         policies={"scripted.v1": ScriptedPolicy},
         mechanisms={
             "normal_form.v1": PayoffMatrixMechanism,
+            "stackelberg.v1": StackelbergMechanism,
             "differentiated_bertrand.v1": DifferentiatedBertrandMechanism,
             "recording.v1": RecordingMechanism,
             "homogeneous_bertrand.v1": HomogeneousBertrandMechanism,
         },
-        protocols={"simultaneous.v1": SimultaneousProtocol},
+        protocols={"simultaneous.v1": SimultaneousProtocol, "sequential.v1": SequentialProtocol},
         solvers={
             "pure_nash.v1": PureNashSolver,
+            "backward_induction.v1": StackelbergBackwardInductionSolver,
             "numerical_nash.v1": NumericalNashSolver,
             "textbook_bertrand.v1": TextbookBertrandSolver,
         },
         game_views={
             "normal_form.v1": NormalFormGameView,
+            "stackelberg.v1": StackelbergGameView,
             "differentiated_bertrand.v1": DifferentiatedBertrandGameView,
             "homogeneous_bertrand.v1": BertrandGameView,
         },
@@ -52,9 +66,13 @@ def standard_registry(gateway: ModelGateway | None = None) -> ComponentRegistry:
             "move.v1": MovePayload,
             "number.v1": NumericPayload,
             "price.v1": PricePayload,
+            "quantity.v1": QuantityPayload,
         },
         parameter_schemas={
             "scripted.v1": ScriptParameters,
+            "stackelberg.v1": StackelbergParameters,
+            "sequential.v1": SequentialParameters,
+            "backward_induction.v1": BackwardInductionParameters,
             "differentiated_bertrand.v1": DifferentiatedBertrandParameters,
             "numerical_nash.v1": NumericalNashParameters,
             "homogeneous_bertrand.v1": BertrandParameters,

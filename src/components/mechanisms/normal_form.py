@@ -3,8 +3,9 @@
 from collections.abc import Sequence
 from math import prod
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
+from simulation_core.game_view import MechanismGameView
 from simulation_core.mechanism import Mechanism
 from simulation_core.solver import FiniteGameView
 from simulation_core.types import (
@@ -36,6 +37,12 @@ class MatrixParameters(FrozenModel):
 
 
 class PayoffMatrixMechanism(Mechanism):
+    requires_joint_actions = True
+
+    def required_action_schemas(self, config: WorldConfig) -> dict[str, dict[str, type[BaseModel]]]:
+        params = MatrixParameters.from_json_values(config.parameters)
+        return {actor.id: {params.action_kind: MovePayload} for actor in config.actors}
+
     def validate_config(self, config: WorldConfig) -> None:
         params = MatrixParameters.model_validate(config.parameters)
         ids = tuple(actor.id for actor in config.actors)
@@ -118,26 +125,15 @@ class PayoffMatrixMechanism(Mechanism):
         return TransitionResult(public=public, outcome=outcome)
 
 
-class NormalFormGameView(FiniteGameView):
+class NormalFormGameView(MechanismGameView, FiniteGameView):
     def __init__(self, config: SimulationConfig, state: WorldState, mechanism: Mechanism) -> None:
-        self.config = config.model_copy(deep=True)
-        self.state = state.model_copy(deep=True)
-        self.mechanism = mechanism
-        mechanism.validate_config(self.config.world.model_copy(deep=True))
+        if not isinstance(mechanism, PayoffMatrixMechanism):
+            raise TypeError("Normal-form view requires a payoff-matrix mechanism")
+        super().__init__(config, state, mechanism)
         self.parameters = MatrixParameters.model_validate(self.config.world.parameters)
-
-    def actor_ids(self) -> tuple[str, ...]:
-        return tuple(actor.id for actor in self.config.world.actors)
 
     def actions(self, actor_id: str) -> tuple[Action, ...]:
         return tuple(
             Action(actor_id=actor_id, kind=self.parameters.action_kind, payload={"move": move})
             for move in self.parameters.choices[actor_id]
-        )
-
-    def evaluate(self, profile: Sequence[Action]) -> Outcome:
-        return self.mechanism.evaluate(
-            self.config.world.model_copy(deep=True),
-            self.state.model_copy(deep=True),
-            tuple(action.model_copy(deep=True) for action in profile),
         )

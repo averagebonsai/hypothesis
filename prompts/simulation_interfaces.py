@@ -1,5 +1,19 @@
 """Reference interface contract for a composable simulation engine.
 
+Cleanup contracts are maintained in src/simulation_core and readable plan section
+22: core DecisionPhase, optional declared schedules, per-actor mechanism payload
+contracts, Solver.validate_game, shared MechanismGameView, ScalarInterval, and
+AnalysisResult. DemandSystemResult is now general quantities; segmented diagnostics
+live in the specialized component result. Numerical best responses retain a
+feasible witness without claiming an uncertified supremum or attainment.
+
+M3 adds SequentialGameView / TwoStageGameView, multi-commit profile provenance,
+subgame-perfect SolveResult labeling, and generic phase permission configuration.
+ProtocolRules declares phase names and validates schedule references; trusted core
+observation projection applies configured overrides. See readable plan section 21
+and src/simulation_core for maintained contracts. This historical sketch does not
+yet describe those implementations in full.
+
 M2.2 implementations also include economics.py abstract model primitives and
 GameView / FiniteGameView / BestResponseGameView capabilities in solver.py.
 Continuous best responses can report an unattained supremum plus a witness.

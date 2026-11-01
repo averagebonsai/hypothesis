@@ -7,12 +7,12 @@ from pydantic import Field, JsonValue, model_validator
 
 from components.common.economics.segmented_logit import ConsumerSegment, SegmentedLogitDemand
 from components.gateways.live import configured_gateway
-from components.library import standard_registry
+from components.jobs import run_model_job
 from components.mechanisms.bertrand import PriceDomain
 from components.mechanisms.differentiated_bertrand import DifferentiatedBertrandParameters
 from components.solvers.numerical_nash import NumericalNashParameters
-from simulation_core.execution import JobResult, JobRunner, LocalBackend
-from simulation_core.model_gateway import BoundedGateway, FakeGateway, ModelGateway, ModelRequest
+from simulation_core.execution import JobResult
+from simulation_core.model_gateway import FakeGateway, ModelGateway, ModelRequest
 from simulation_core.request import ExperimentRequest, SuppliedInput
 from simulation_core.types import (
     ActionSpace,
@@ -276,12 +276,13 @@ def run_job(
     input_source: str = "user",
 ) -> JobResult:
     request, config = build_experiment(inputs, model, input_source)
-    bounded = BoundedGateway(
-        gateway or FakeGateway(fake_response),
+    return run_model_job(
+        request,
+        config,
+        gateway if gateway is not None else FakeGateway(fake_response),
         max_calls=2 * len(inputs.firms) * inputs.rounds,
         max_output_tokens_per_call=4200,
     )
-    return JobRunner(LocalBackend(standard_registry(bounded))).run(request, config)
 
 
 def run_live_job(

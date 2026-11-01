@@ -1,7 +1,21 @@
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from typing import Self
 
-from .types import Action, WorldConfig, WorldState
+from pydantic import Field, model_validator
+
+from .types import Action, FrozenModel, WorldConfig, WorldState
+
+
+class DecisionPhase(FrozenModel):
+    name: str = Field(min_length=1)
+    actor_ids: tuple[str, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_actors(self) -> Self:
+        if len(set(self.actor_ids)) != len(self.actor_ids):
+            raise ValueError("A phase cannot repeat an actor")
+        return self
 
 
 class ProtocolRules(ABC):
@@ -23,3 +37,14 @@ class ProtocolRules(ABC):
 
     @abstractmethod
     def next_phase(self, config: WorldConfig, state: WorldState) -> str: ...
+
+    def validate_config(self, config: WorldConfig) -> None:
+        """Optional scheduling preflight; invoked before any actor is called."""
+
+    def declared_phases(self) -> frozenset[str]:
+        """Required when a configuration supplies phase-specific permissions."""
+        return frozenset()
+
+    def decision_schedule(self, config: WorldConfig) -> Iterable[DecisionPhase] | None:
+        """Static schedule when known; None for state-dependent activation."""
+        return None

@@ -285,3 +285,20 @@ acceptance checks, and the live differentiated_bertrand.ipynb demonstration.
 Readable plan section 20 supersedes the old component tree: model-specific views
 are co-located with mechanisms, and reusable implementations are grouped under
 components.common.economics and components.common.math.
+
+
+Readable plan section 21 defines accepted M3: generic finite sequential phases,
+phase-specific permission overrides, multi-commit benchmark profiles, a two-stage
+continuation interface, and the bounded linear Stackelberg demonstration. It
+implements the remaining sequential/backward-induction work from the original M3
+table; simultaneous scheduling and Nash capabilities were delivered earlier. The
+implementation includes a separate analytical backward-induction benchmark and
+the live stackelberg.ipynb notebook; full extensive-form trees, repeated games,
+and isolated generated-code execution remain future work.
+
+
+Readable plan section 22 records the accepted cleanup: early executable component
+compatibility checks, general demand/result/domain contracts, honest numerical
+candidate semantics, consistent best-response settings, and small shared adapters
+and host job helpers. It precedes the unfamiliar-task capability and extension
+workflow. Existing game-specific benchmark orchestration remains scoped as such.

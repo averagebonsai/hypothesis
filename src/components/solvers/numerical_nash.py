@@ -1,18 +1,21 @@
 """Multistart bounded scalar Nash search, independently verified by payoff deviations."""
 
+from collections.abc import Sequence
 from itertools import islice, product
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import Field, JsonValue
+from pydantic import AliasChoices, Field, JsonValue
 from scipy.optimize import least_squares
 
 from components.common.math.scalar import (
     OptimizationBudgetExceeded,
     ScalarSearchSettings,
-    maximize_scalar,
 )
+from components.solvers.response import scalar_best_response
+from simulation_core.domains import ScalarInterval
 from simulation_core.solver import (
+    BestResponseResult,
     DifferentiableScalarGameView,
     Equilibrium,
     GameView,
@@ -27,11 +30,36 @@ class NumericalNashParameters(FrozenModel):
     max_root_evaluations: int = Field(default=300, gt=0, le=3000)
     fallback_steps: int = Field(default=60, ge=0, le=300)
     payoff_tolerance: float = Field(default=1e-5, gt=0)
-    price_tolerance: float = Field(default=1e-5, gt=0)
+    action_tolerance: float = Field(
+        default=1e-5, gt=0, validation_alias=AliasChoices("action_tolerance", "price_tolerance")
+    )
     best_response: ScalarSearchSettings = Field(default_factory=ScalarSearchSettings)
 
 
 class NumericalNashSolver(Solver):
+    required_game_type = DifferentiableScalarGameView
+
+    def validate_game(self, game: GameView) -> None:
+        super().validate_game(game)
+        assert isinstance(game, DifferentiableScalarGameView)
+        ids = game.actor_ids()
+        if not ids or len(set(ids)) != len(ids):
+            raise ValueError("Scalar game requires unique actors and nonempty domains")
+        for aid in ids:
+            lower, upper = game.action_bounds(aid)
+            ScalarInterval(lower=lower, upper=upper)
+
+    def best_responses(
+        self, game: GameView, profile: Sequence[Action], parameters: dict[str, JsonValue]
+    ) -> dict[str, BestResponseResult]:
+        self.validate_game(game)
+        assert isinstance(game, DifferentiableScalarGameView)
+        settings = NumericalNashParameters.from_json_values(parameters)
+        return {
+            aid: scalar_best_response(game, aid, profile, settings.best_response, cross_check=True)
+            for aid in game.actor_ids()
+        }
+
     def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         settings = NumericalNashParameters.model_validate(parameters)
         if not isinstance(game, DifferentiableScalarGameView):
@@ -49,8 +77,8 @@ class NumericalNashSolver(Solver):
         solutions: list[Equilibrium] = []
         scales = max(game.payoff_scale(), 1.0)
 
-        def profile(prices: NDArray[np.float64]) -> tuple[Action, ...]:
-            return tuple(game.scalar_action(aid, float(value)) for aid, value in zip(ids, prices))
+        def profile(values: NDArray[np.float64]) -> tuple[Action, ...]:
+            return tuple(game.scalar_action(aid, float(value)) for aid, value in zip(ids, values))
 
         def residual(z: NDArray[np.float64]) -> NDArray[np.float64]:
             actions = profile(lower + widths * z)
@@ -61,53 +89,37 @@ class NumericalNashSolver(Solver):
             step = 0.1 * normalized / (1.0 + np.abs(normalized))
             return z - np.clip(z + step, 0.0, 1.0)
 
-        def snap(prices: NDArray[np.float64]) -> NDArray[np.float64]:
-            result = prices.copy()
+        def snap(values: NDArray[np.float64]) -> NDArray[np.float64]:
+            result = values.copy()
             for i, (low, high) in enumerate(domains):
-                if abs(result[i] - low) <= settings.price_tolerance:
+                if abs(result[i] - low) <= settings.action_tolerance:
                     result[i] = low
-                elif abs(result[i] - high) <= settings.price_tolerance:
+                elif abs(result[i] - high) <= settings.action_tolerance:
                     result[i] = high
             return result
 
-        def verify(prices: NDArray[np.float64], method: str) -> bool:
-            prices = snap(prices)
+        def verify(values: NDArray[np.float64], method: str) -> bool:
+            values = snap(values)
             if any(
-                max(abs(prices[i] - game.action_value(eq.actions[i])) for i in range(len(ids)))
-                <= settings.price_tolerance
+                max(abs(values[i] - game.action_value(eq.actions[i])) for i in range(len(ids)))
+                <= settings.action_tolerance
                 for eq in solutions
             ):
                 return True
-            actions = profile(prices)
+            actions = profile(values)
             outcome = game.evaluate(actions)
             regrets = {}
             checks: dict[str, JsonValue] = {}
             for i, aid in enumerate(ids):
-
-                def objective(value: float, index: int = i, actor_id: str = aid) -> float:
-                    candidate = list(actions)
-                    candidate[index] = game.scalar_action(actor_id, value)
-                    return game.evaluate(candidate).payoffs[actor_id]
-
-                first = maximize_scalar(
-                    objective, domains[i], settings.best_response, float(prices[i])
+                response = scalar_best_response(
+                    game, aid, actions, settings.best_response, cross_check=True
                 )
-                independent = maximize_scalar(
-                    objective,
-                    domains[i],
-                    settings.best_response,
-                    float(prices[i]),
-                    independent=True,
-                )
-                # Do not clamp payoff itself to zero: constrained firms may have unavoidable losses.
-                gain = max(0.0, max(first.payoff, independent.payoff) - outcome.payoffs[aid])
-                regrets[aid] = gain
+                regrets[aid] = response.gain
                 checks[aid] = {
-                    "gain": gain,
-                    "primary": first.model_dump(mode="json"),
-                    "independent": independent.model_dump(mode="json"),
-                    "at_lower_bound": float(prices[i]) == domains[i][0],
-                    "at_upper_bound": float(prices[i]) == domains[i][1],
+                    "gain": response.gain,
+                    **response.diagnostics,
+                    "at_lower_bound": float(values[i]) == domains[i][0],
+                    "at_upper_bound": float(values[i]) == domains[i][1],
                 }
             passed = max(regrets.values()) <= settings.payoff_tolerance
             attempts.append(
@@ -116,7 +128,7 @@ class NumericalNashSolver(Solver):
                     "verified": passed,
                     "checks": checks,
                     "projected_gradient_residual": float(
-                        np.max(np.abs(residual((prices - lower) / widths)))
+                        np.max(np.abs(residual((values - lower) / widths)))
                     ),
                 }
             )
@@ -163,17 +175,20 @@ class NumericalNashSolver(Solver):
                 if root.success:
                     verify(lower + widths * root.x, "multistart_candidate")
             if not solutions and settings.fallback_steps:
-                prices = lower + 0.5 * widths
+                values = lower + 0.5 * widths
                 for step in range(settings.fallback_steps):
-                    actions = profile(prices)
-                    replies = [game.best_response(aid, actions) for aid in ids]
+                    actions = profile(values)
+                    replies = [
+                        scalar_best_response(game, aid, actions, settings.best_response)
+                        for aid in ids
+                    ]
                     target = np.array(
                         [game.action_value(reply.witness_action) for reply in replies]
                     )
                     if max(reply.gain for reply in replies) <= settings.payoff_tolerance:
-                        verify(prices, "damped_best_response_fallback")
+                        verify(values, "damped_best_response_fallback")
                         break
-                    prices = 0.5 * prices + 0.5 * target
+                    values = 0.5 * values + 0.5 * target
                 attempts.append(
                     {"method": "damped_best_response", "steps": step + 1, "found": bool(solutions)}
                 )
@@ -202,7 +217,7 @@ class NumericalNashSolver(Solver):
         diagnostics: dict[str, JsonValue] = {
             "attempts": [dict(item) for item in attempts],
             "payoff_tolerance": settings.payoff_tolerance,
-            "price_tolerance": settings.price_tolerance,
+            "action_tolerance": settings.action_tolerance,
             "scope": "Numerically verified bounded-game candidates; not a proof of global optimality, uniqueness, or completeness",
             "solution_selection": "All distinct equilibria found are retained; no selection or averaging",
             "method": "Multistart projected-gradient roots; grid/local and independent SHGO deviation checks; bounded fallback",

@@ -7,10 +7,10 @@ from pydantic import Field, JsonValue, model_validator
 
 from components.common.economics.models import LinearDemand
 from components.gateways.live import configured_gateway
-from components.library import standard_registry
+from components.jobs import run_model_job
 from components.mechanisms.bertrand import BertrandParameters, PriceDomain
-from simulation_core.execution import JobResult, JobRunner, LocalBackend
-from simulation_core.model_gateway import BoundedGateway, FakeGateway, ModelGateway, ModelRequest
+from simulation_core.execution import JobResult
+from simulation_core.model_gateway import FakeGateway, ModelGateway, ModelRequest
 from simulation_core.request import ExperimentRequest, SuppliedInput
 from simulation_core.types import (
     ActionSpace,
@@ -174,11 +174,6 @@ def run_job(
     gateway: ModelGateway | None = None,
 ) -> JobResult:
     config = build_experiment(model, settings)
-    bounded = BoundedGateway(
-        gateway or FakeGateway(fake_response),
-        max_calls=4 * config.max_steps,
-        max_output_tokens_per_call=1200,
-    )
     request = ExperimentRequest(
         hypothesis="How do LLM firms price under textbook homogeneous Bertrand competition, "
         "and how far are their actions and outcomes from the Bertrand-Nash equilibrium?",
@@ -194,7 +189,13 @@ def run_job(
             ),
         ),
     )
-    return JobRunner(LocalBackend(standard_registry(bounded))).run(request, config)
+    return run_model_job(
+        request,
+        config,
+        gateway if gateway is not None else FakeGateway(fake_response),
+        max_calls=4 * config.max_steps,
+        max_output_tokens_per_call=1200,
+    )
 
 
 def run_live_job(

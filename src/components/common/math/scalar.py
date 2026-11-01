@@ -5,7 +5,7 @@ from math import isfinite
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from scipy.optimize import minimize_scalar, shgo
 
 from simulation_core.types import FrozenModel
@@ -18,15 +18,22 @@ class OptimizationBudgetExceeded(ArithmeticError):
 class ScalarSearchSettings(FrozenModel):
     grid_points: int = Field(default=65, ge=9, le=513)
     max_evaluations: int = Field(default=3000, gt=0, le=50000)
-    price_tolerance: float = Field(default=1e-8, gt=0)
+    action_tolerance: float = Field(
+        default=1e-8, gt=0, validation_alias=AliasChoices("action_tolerance", "price_tolerance")
+    )
 
 
 class ScalarMaximum(FrozenModel):
     value: float
-    payoff: float
+    objective_value: float = Field(validation_alias=AliasChoices("objective_value", "payoff"))
     evaluations: int
     method: str
     optimizer_successes: int
+
+    @property
+    def payoff(self) -> float:
+        """Read compatibility for older callers; JSON uses objective_value."""
+        return self.objective_value
 
 
 def maximize_scalar(
@@ -49,10 +56,10 @@ def maximize_scalar(
             if calls >= settings.max_evaluations:
                 raise OptimizationBudgetExceeded("Scalar objective evaluation budget exhausted")
             calls += 1
-            payoff = float(objective(value))
-            if not isfinite(payoff):
-                raise ArithmeticError("Nonfinite scalar payoff")
-            cache[value] = payoff
+            objective_value = float(objective(value))
+            if not isfinite(objective_value):
+                raise ArithmeticError("Nonfinite scalar objective")
+            cache[value] = objective_value
         return cache[value]
 
     offsets = (high - low) * np.geomspace(1e-12, 1.0, settings.grid_points)
@@ -96,7 +103,7 @@ def maximize_scalar(
                 lambda p: -evaluate(float(p)),
                 bounds=interval,
                 method="bounded",
-                options={"xatol": settings.price_tolerance, "maxiter": 200},
+                options={"xatol": settings.action_tolerance, "maxiter": 200},
             )
             if local_result.success:
                 evaluate(float(local_result.x))
@@ -106,7 +113,7 @@ def maximize_scalar(
     best = max(cache, key=cache.__getitem__)
     return ScalarMaximum(
         value=best,
-        payoff=cache[best],
+        objective_value=cache[best],
         evaluations=calls,
         optimizer_successes=successes,
         method="SHGO+uniform-geometric-samples"

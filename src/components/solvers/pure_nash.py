@@ -16,6 +16,8 @@ class PureNashParameters(FrozenModel):
 
 
 class PureNashSolver(Solver):
+    required_game_type = FiniteGameView
+
     def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         params = PureNashParameters.model_validate(parameters)
         if not isinstance(game, FiniteGameView):

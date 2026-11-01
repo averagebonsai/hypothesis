@@ -1,7 +1,8 @@
 # hypothesis
 
-A composable toolkit for LLM-driven simulations. The shared execution framework supports scripted and generic LLM policies. M2.1 adds
-a provider-neutral model gateway and separate finite-game pure-Nash benchmarks.
+A composable toolkit for LLM-driven simulations. The shared execution framework
+supports scripted and generic LLM policies, simultaneous and sequential protocols,
+and independent analytical or numerical game-theory benchmarks.
 
 ```sh
 uv sync
@@ -11,13 +12,14 @@ uv run mypy src
 uv run python -m examples.payoff_matrix
 uv run python -m examples.measurements
 uv run python -m examples.llm_payoff_matrix
+uv run python -m examples.stackelberg
 ```
 
-Open `visualisations/payoff_matrix.ipynb` with the project's `.venv` Python kernel.
-The executed notebook calls the generic LLMPolicy with a deterministic fake gateway,
-displays actor outcomes alongside the independent pure-Nash benchmark, reconstructs
-committed states, shows model-call provenance, and lists configured assumptions.
-Its saved outputs are integration fixtures, not live LLM observations.
+Open `visualisations/purestrategy.ipynb`, `bertrand.ipynb`,
+`differentiated_bertrand.ipynb`, or `stackelberg.ipynb` with the project's `.venv`
+Python kernel. The saved notebooks contain live LLM results, independent benchmark
+comparisons, action explanations, provenance, and configured assumptions. Their
+`USE_LIVE_API` switch enables deterministic fake gateways for offline verification.
 
 The shared interfaces are explicit abstract parents:
 
@@ -69,8 +71,8 @@ experiment-building defaults must be recorded in configuration assumptions.
 Internal event snapshots are the canonical committed record and include private
 state; never provide them to actors. Replay makes no policy or mechanism calls.
 M1 logging is in-memory, and the local runner is for trusted components. Durable
-storage, redacted export, stochastic mechanisms, continuous numerical solvers, and
-isolated untrusted extensions remain future milestones.
+storage, redacted export, stochastic mechanisms, and isolated untrusted extensions
+remain future milestones.
 
 
 User requests and temporary jobs
@@ -385,6 +387,7 @@ src/components/
     normal_form.py          # Parameters, mechanism, and NormalFormGameView
     bertrand.py             # Parameters, mechanism, and BertrandGameView
     differentiated_bertrand.py  # Parameters, mechanism, and its game view
+    stackelberg.py          # Quantity schema, two-stage mechanism, and game view
     recording.py
   solvers/                  # Game-level solution concepts and search procedures
   policies/
@@ -406,3 +409,106 @@ economic assumptions. Game-theory solvers stay in solvers because they implement
 solution concepts using game views. Abstract economic and solver contracts remain
 in simulation_core. Component IDs and JSON job formats are unchanged. Restart
 existing notebook kernels after updating imports; saved live outputs are preserved.
+
+
+Sequential phases and Stackelberg (M3)
+-------------------------------------
+
+`SequentialProtocol` consumes typed `DecisionPhase` entries: each phase names its
+active actors, who each act exactly once. A phase may contain multiple actors, and
+an actor may participate in later phases. Scheduling has no market-specific logic.
+`SimulationConfig.phase_permissions[phase][actor]` replaces that actor's base
+permission object for the selected phase; missing overrides use base permissions.
+Unknown actor/phase references fail before actor calls. Observation projection
+remains trusted runtime code, and private state remains isolated per actor.
+
+`SequentialGameView` assembles a comparison profile from a declared sequence of
+committed stages, recording each action's source tick. `TwoStageGameView` adds a
+selected optimal follower continuation and separately interprets leader/follower
+deviations. The current profile adapter covers one episode; it rejects missing or
+reordered stages. A partial run can retain a theoretical solution while its
+comparison is explicitly incomplete. It never invents missing actor actions.
+
+`examples.stackelberg.StackelbergInputs` accepts inverse demand, leader/follower
+identities, nonnegative constant costs, bounds, and optional personas. The example
+uses `sequential.v1`, `stackelberg.v1`, the existing `llm.v1` policy, and the existing
+canonical event recording/job runner. The mechanism records an irreversible leader
+commitment, then clears the market after the follower commits. The follower sees
+the actual leader quantity through its phase permissions. Shared inverse demand,
+cost, and profit implementations live in `components.common.economics`.
+
+`backward_induction.v1` is currently the exact bounded linear Stackelberg solver,
+not a general extensive-form tree solver. It uses the bounded follower response
+and piecewise quadratic leader optimization, including asymmetric costs, binding
+bounds, shutdown, forced losses, and zero-price ties. Results are marked
+`subgame_perfect`, with a minimum-quantity follower tie rule. Maximizing candidate
+actions and any optimal zero-profit intervals are retained; this does not enumerate
+every follower strategy possible under alternative tie choices.
+
+The follower diagnostic is its conditional improvement at the observed leader
+quantity. The leader diagnostic compares rational continuations, rather than
+holding the observed follower quantity fixed. Actual leader profit can exceed the
+benchmark if the LLM follower responds poorly. One trajectory does not identify an
+LLM's full contingent strategy.
+
+`visualisations/stackelberg.ipynb` includes editable Pydantic inputs, the stage
+timeline and visible commitments, quantity/profit/price comparisons, follower
+response and leader-profit curves, explanations for every action, and replay. Its
+saved Contributor run chose quantities (40,20), price 40, and profits (800,400),
+matching the analytical benchmark for a=100, b=1, and both costs=20. Each actor used
+one accepted call. Live calls are capped at two attempts per actor. The offline
+fixture deliberately chooses (30,20), demonstrating nonzero conditional gains and
+the distinction between actual and anticipated leader profit.
+
+
+Component compatibility and shared building blocks
+-------------------------------------------------
+
+`ComponentRegistry.validate_config()` now validates composition before actor
+decisions. This also runs when SimulationRuntime is called directly. Mechanisms
+declare supported action schemas per actor and scheduling requirements; protocols
+can expose a static sequence of core `DecisionPhase` objects. Preflight checks
+initial state, payload contracts, known schedules, initial required observations,
+and permission coverage for later declared stages. It constructs the benchmark
+view and checks the solver's required capability without solving the game or
+calling a policy. `describe()` exposes solver capability requirements. Incompatible
+combinations raise `ComponentCompatibilityError` with the reason.
+
+Payload compatibility is conservative structural JSON Schema equality, ignoring
+the model's display title; it does not infer arbitrary schema subtyping. A
+mechanism may declare different schemas for different actors, or leave an actor
+open to registry-validated payloads, as RecordingMechanism does. Dynamic protocols
+may return no static schedule; their later state-dependent legality remains a
+runtime check. Structural compatibility does not establish the economic
+assumptions of a particular theorem: analytical solvers still return `unsupported`
+for compatible views outside their theorem's scope.
+
+`DemandSystemResult` contains general nonnegative finite quantities. The
+segmented-share and outside-population conservation contract now lives in
+`components.common.economics.segmented_logit.SegmentedDemandResult`. Other demand
+systems do not need to invent consumer segments or an outside option.
+
+`simulation_core.domains.ScalarInterval` supports finite ordered coordinates,
+including negative values. PriceDomain and QuantityDomain add their own
+nonnegative restrictions. `simulation_core.analysis.AnalysisResult` is an
+extensible result envelope with no implied equilibrium or certification;
+SolveResult remains its game-equilibrium specialization. This does not change the
+existing equilibrium benchmark runner into a universal analysis orchestrator.
+
+Numerical settings use `action_tolerance`; old `price_tolerance` inputs remain
+accepted. ScalarMaximum serializes `objective_value`, accepts old `payoff` JSON,
+and retains a read-only `payoff` accessor. Numerical best responses expose
+`estimated_best_payoff` and a feasible `witness_action`; `supremum_payoff`,
+`attained`, and `maximizing_action` are unset when the search cannot certify them.
+Analytical Bertrand responses retain certified suprema and attainment distinctions.
+
+`components.solvers.response` shares unilateral-objective construction and scalar
+search across game views, numerical Nash verification, fallback, and observed
+benchmark diagnostics. The numerical solver supplies the same configured search
+settings to each path. Independent numerical cross-checks remain distinct.
+`MechanismGameView` shares snapshot-isolated evaluation; registry policy creation,
+permission lookup, and initial snapshots are also shared. `components.jobs.run_model_job`
+centralizes the examples' bounded gateway and trusted job setup; live provider
+selection uses the existing configured_gateway helper throughout. Defensive
+copies, canonical snapshots, actor-specific private state, and execution-boundary
+revalidation remain in place.

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from math import nextafter
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from components.common.economics.models import (
     ConstantMarginalCost,
@@ -12,6 +12,8 @@ from components.common.economics.models import (
     LowestPriceAllocation,
     RevenueMinusCost,
 )
+from simulation_core.domains import ScalarInterval
+from simulation_core.game_view import MechanismGameView
 from simulation_core.mechanism import Mechanism
 from simulation_core.solver import BestResponseGameView, BestResponseResult
 from simulation_core.types import (
@@ -29,18 +31,9 @@ class PricePayload(FrozenModel):
     price: float = Field(ge=0)
 
 
-class PriceDomain(FrozenModel):
+class PriceDomain(ScalarInterval):
     lower: float = Field(default=0.0, ge=0)
     upper: float = Field(gt=0)
-
-    @model_validator(mode="after")
-    def ordered(self) -> Self:
-        if self.lower >= self.upper:
-            raise ValueError("Price domain must have lower < upper")
-        return self
-
-    def contains(self, price: float) -> bool:
-        return self.lower <= price <= self.upper
 
 
 class BertrandParameters(FrozenModel):
@@ -65,6 +58,12 @@ class BertrandParameters(FrozenModel):
 
 
 class HomogeneousBertrandMechanism(Mechanism):
+    requires_joint_actions = True
+
+    def required_action_schemas(self, config: WorldConfig) -> dict[str, dict[str, type[BaseModel]]]:
+        params = BertrandParameters.from_json_values(config.parameters)
+        return {actor.id: {params.action_kind: PricePayload} for actor in config.actors}
+
     def __init__(self) -> None:
         self.allocation = LowestPriceAllocation()
         self.profit_model = RevenueMinusCost()
@@ -160,28 +159,17 @@ class HomogeneousBertrandMechanism(Mechanism):
                 raise ValueError("Stored market outcome disagrees with committed prices")
 
 
-class BertrandGameView(BestResponseGameView):
+class BertrandGameView(MechanismGameView, BestResponseGameView):
+    mechanism: HomogeneousBertrandMechanism
+
     def __init__(self, config: SimulationConfig, state: WorldState, mechanism: Mechanism) -> None:
         if not isinstance(mechanism, HomogeneousBertrandMechanism):
             raise TypeError("Bertrand view requires the homogeneous Bertrand mechanism")
-        self.config = config.model_copy(deep=True)
-        self.state = state.model_copy(deep=True)
-        self.mechanism = mechanism
-        mechanism.validate_config(self.config.world.model_copy(deep=True))
+        super().__init__(config, state, mechanism)
         self.parameters = BertrandParameters.model_validate(self.config.world.parameters)
-
-    def actor_ids(self) -> tuple[str, ...]:
-        return tuple(actor.id for actor in self.config.world.actors)
 
     def price_action(self, actor_id: str, price: float) -> Action:
         return Action(actor_id=actor_id, kind=self.parameters.action_kind, payload={"price": price})
-
-    def evaluate(self, profile: Sequence[Action]) -> Outcome:
-        return self.mechanism.evaluate(
-            self.config.world.model_copy(deep=True),
-            self.state.model_copy(deep=True),
-            tuple(a.model_copy(deep=True) for a in profile),
-        )
 
     def best_response(self, actor_id: str, profile: Sequence[Action]) -> BestResponseResult:
         baseline = self.evaluate(profile)

@@ -1,7 +1,7 @@
 """Stable segmented multinomial logit including an explicit outside option."""
 
 from collections.abc import Mapping
-from math import exp, fsum, isfinite
+from math import exp, fsum, isclose, isfinite
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -9,6 +9,32 @@ from pydantic import Field, model_validator
 from components.common.economics.models import nonnegative_finite
 from simulation_core.economics import DemandSystemResult, DifferentiableDemandSystem
 from simulation_core.types import FrozenModel
+
+
+class SegmentedDemandResult(DemandSystemResult):
+    segment_shares: dict[str, dict[str, float]]
+    outside_shares: dict[str, float]
+    outside_quantity: float = Field(ge=0)
+    total_population: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def conservation(self) -> Self:
+        if set(self.segment_shares) != set(self.outside_shares):
+            raise ValueError("Every segment requires an outside share")
+        for sid, shares in self.segment_shares.items():
+            values = [*shares.values(), self.outside_shares[sid]]
+            if set(shares) != set(self.quantities) or any(not 0 <= value <= 1 for value in values):
+                raise ValueError("Invalid segment share dimensions or probabilities")
+            if not isclose(sum(values), 1.0, abs_tol=1e-12):
+                raise ValueError("Firm plus outside shares must sum to one")
+        if not isclose(
+            sum(self.quantities.values()) + self.outside_quantity,
+            self.total_population,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("Firm and outside quantities must conserve population")
+        return self
 
 
 class ConsumerSegment(FrozenModel):
@@ -39,7 +65,7 @@ class SegmentedLogitDemand(FrozenModel, DifferentiableDemandSystem):
             raise ValueError("Total population must be finite")
         return self
 
-    def evaluate(self, prices: Mapping[str, float]) -> DemandSystemResult:
+    def evaluate(self, prices: Mapping[str, float]) -> SegmentedDemandResult:
         if set(prices) != set(self.firm_ids):
             raise ValueError("Prices must cover exactly the demand-system firms")
         for price in prices.values():
@@ -65,7 +91,7 @@ class SegmentedLogitDemand(FrozenModel, DifferentiableDemandSystem):
             for aid in self.firm_ids:
                 quantities[aid] += segment.population * shares[segment.id][aid]
             outside_quantity += segment.population * probabilities[0]
-        return DemandSystemResult(
+        return SegmentedDemandResult(
             quantities=quantities,
             segment_shares=shares,
             outside_shares=outside,

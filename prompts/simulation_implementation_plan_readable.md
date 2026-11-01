@@ -696,3 +696,130 @@ Update source/tests/docs/notebook imports. Verify all tests, lint, types, and al
 notebook code paths with fake gateways; preserve prior live notebook outputs and
 make no new API calls for this structural refactor. Do not retain legacy import shims
 for this internal package reorganization.
+
+
+## 21. Accepted Milestone 3: sequential phases and quantity leadership
+
+Implement a generic finite phase schedule, then demonstrate one Stackelberg
+quantity-leadership episode. Each phase declares active actors; each active actor
+chooses one action. Phases can group actors or repeat actors at later stages. The
+protocol owns phase progression and termination; mechanism transition proposals
+and the runtime commit loop retain their existing responsibilities.
+
+Add typed phase-specific observation permissions to SimulationConfig. An override
+replaces that actor's base permission object for that phase; missing overrides
+fall back to base permissions. Reject unknown actor/phase references before actor
+calls. Trusted runtime projection supplies only allowed public fields and the
+actor's own private facts/memory. Sequential scheduling must not introduce access
+to another actor's private state.
+
+Extend solver-facing parent interfaces with SequentialGameView, committed-stage
+profile assembly, and TwoStageGameView with a chosen optimal follower response.
+Benchmark reports preserve per-action source ticks and distinguish complete,
+incomplete, and unavailable comparisons. The profile adapter supports one episode
+and rejects missing/reordered stages. The finite and continuous simultaneous
+benchmarks retain their existing contracts. Benchmark code never chooses primary
+actor actions or changes committed states.
+
+The demonstration uses two LLM firms with continuous bounded quantities,
+P=max(a-b*(qL+qF),0), nonnegative constant marginal costs, and profit (P-c_i)*q_i.
+User inputs are validated Pydantic values; illustrative numbers are explicitly
+labeled. Leader and follower roles, bounds, personas, information, scheduling,
+and assumptions are configuration. Reuse LLMPolicy, the gateway, canonical event
+log, temporary-job flow, shared costs/profit, and reusable linear inverse demand.
+Keep the mechanism, parameters, quantity schema, and view co-located.
+
+The leader's commitment is irrevocable and yields no realized market payoff on
+its own. The follower observes that actual committed quantity and then acts. Only
+after the second commit does the market clear. A step-limited leader-only run
+retains its event and partial state without a fictitious follower choice or payoff.
+
+Supply a separate analytic backward-induction benchmark. For bounded linear
+Stackelberg, compute the follower's bounded best response and optimize the
+leader's piecewise quadratic continuation payoff. Handle unequal costs, binding
+bounds, zero output, forced losses, and truncated zero-price regions. Explicitly
+select minimum feasible follower quantity on zero-profit ties. Retain all
+maximizing analytic candidates and represent optimal zero-profit intervals.
+The reported subgame-perfect benchmark is conditional on this follower tie rule;
+this solver does not enumerate all possible tied follower strategies or implement
+a general extensive-form game tree.
+
+Follower conditional gain holds the observed leader commitment fixed. Leader
+gain compares commitments along the rational follower-response curve, rather
+than holding the observed follower action fixed. Report actual and anticipated
+leader payoffs separately. One LLM trajectory does not reveal its follower's full
+contingent strategy or establish subgame perfection.
+
+Acceptance checks: generic sequential scheduling with an unrelated mechanism;
+stage activation and exactly one action; actual commitment visibility and private
+isolation; delayed market clearing and irreversible order; textbook formulas;
+asymmetric costs and independent dense-grid comparisons; binding quantity bounds;
+shutdown/forced loss and zero-profit multiplicity; malformed/unauthorized actions;
+pure evaluation and benchmark isolation; canonical replay and JSON roundtrips;
+partial runs and comparison ticks; existing simultaneous regressions.
+
+`visualisations/stackelberg.ipynb` must call package implementations, accept edited
+typed inputs, and show the stage timeline, actor explanations, model provenance,
+quantity/price/profit comparisons, follower response curve, and leader continuation
+profit curve. Demonstrate offline before bounded live calls. Preserve earlier
+notebooks' live outputs. List input provenance and assumptions at the end.
+
+Implemented verification: all notebook paths pass offline with live transport
+blocked. The live muse-spark-1.3-contributor run selected qL=40, qF=20, P=40,
+and profits (800,400), matching the analytical benchmark for a=100, b=1, cL=cF=20.
+Both actions succeeded on the first attempt and have logged stated explanations.
+The saved notebook contains no credential values. This result is for the
+illustrative input, not evidence that the model always behaves optimally.
+
+Scope boundary: this milestone covers one two-stage episode using approved
+components and trusted LocalBackend. Repeated games, learning, durable storage,
+and isolated generated-code execution remain separate work. The original
+technical M3 table also lists simultaneous scheduling and Nash solvers, which
+were already delivered in earlier increments.
+
+Final verification: 151 tests passed, one opt-in live test skipped; Ruff and mypy
+passed. All four notebook paths executed offline, and the new live notebook
+executed successfully. Earlier notebooks' saved outputs were preserved.
+
+
+## 22. Accepted cleanup before unfamiliar-task extension work
+
+Keep the runtime experiment-agnostic and consolidate existing components before
+adding the gap-analysis and extension-development workflow. Compatibility must
+be checked before actor decisions, including direct runtime calls. Mechanisms
+declare actor-specific supported payload schemas and schedule requirements;
+protocols optionally expose static core DecisionPhase entries. Validate known
+composition, initial state, observation permissions, view/mechanism pairing, and
+solver/view capability. Report ComponentCompatibilityError for known incompatible
+compositions. Do not run the solver during preflight. Keep runtime validation for
+dynamic schedules and actual transitions, and keep standalone solver unsupported
+statuses for economic theorem restrictions. Schema matching is conservative
+structural equality, not arbitrary subtype inference.
+
+Remove segmented/outside-option assumptions from the general DemandSystemResult;
+retain them in specialized SegmentedDemandResult. Introduce a finite ScalarInterval
+parent, preserving nonnegative price/quantity restrictions in their subclasses.
+Separate the generic AnalysisResult envelope from equilibrium-specific SolveResult;
+other typed analyses need not fabricate equilibria or imply a certification. The
+existing benchmark orchestration remains game-specific in this increment.
+
+Use action_tolerance and objective_value in generic numerical APIs; accept old
+configuration names and retain the old scalar payoff read accessor. Distinguish
+certified mathematical suprema from best-found numerical candidates. Unknown
+attainment is None; feasible witness actions remain available. Preserve analytical
+Bertrand's attained/unattained optimum distinctions.
+
+Share unilateral-objective construction and scalar response search across views,
+verification, fallback, and observed diagnostics. Numerical Nash must apply its
+configured search settings consistently. Keep independent cross-checking methods.
+Share isolated mechanism delegation, policy setup, permission selection, initial
+state construction, and bounded model-job setup through small helpers. Avoid
+a universal experiment builder or speculative vector solver. Preserve defensive
+snapshots, temporary-job cleanup, provenance, privacy, and existing experiments.
+
+Acceptance includes zero model calls for incompatible mechanism/view/solver,
+payloads, static timing, or later-phase permission coverage; structurally equivalent
+payload schema classes; nonsegmented demand; retained segmented conservation;
+negative general scalar coordinates; neutral analysis results; consistent numerical
+settings; and explicit numerical uncertainty. Run all regressions and notebooks
+offline, preserving saved live outputs and making no live calls for cleanup.

@@ -1,8 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from pydantic import Field, JsonValue
 
-from simulation_core.protocol import ProtocolRules
+from simulation_core.protocol import DecisionPhase, ProtocolRules
 from simulation_core.types import Action, FrozenModel, WorldConfig, WorldState
 
 
@@ -38,3 +38,11 @@ class SimultaneousProtocol(ProtocolRules):
             if state.tick + 1 >= self.parameters.rounds
             else self.parameters.active_phase
         )
+
+    def declared_phases(self) -> frozenset[str]:
+        return frozenset({self.parameters.active_phase, self.parameters.terminal_phase})
+
+    def decision_schedule(self, config: WorldConfig) -> Iterable[DecisionPhase]:
+        actors = tuple(actor.id for actor in config.actors)
+        phase = DecisionPhase(name=self.parameters.active_phase, actor_ids=actors)
+        return (phase for _ in range(self.parameters.rounds))

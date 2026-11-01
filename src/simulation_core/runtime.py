@@ -2,20 +2,19 @@ import json
 from copy import deepcopy
 
 from .logging import log_committed_decisions
-from .observation import observe
+from .observation import observe, permissions_for
 from .registry import ComponentRegistry
 from .types import (
     Decision,
     Event,
     ModelCallRecord,
-    ObservationPermissions,
     PrivateState,
     RunResult,
     SimulationConfig,
     TransitionResult,
     WorldState,
 )
-from .validation import validate_state
+from .validation import initial_state, validate_state
 
 
 class SimulationRuntime:
@@ -26,29 +25,13 @@ class SimulationRuntime:
 
     def run(self, config: SimulationConfig) -> RunResult:
         config = SimulationConfig.model_validate(config.model_dump())
-        self.registry.validate_ids(config)
+        self.registry.validate_config(config)
         world = config.world
         mechanism = self.registry.mechanisms[config.mechanism_id]()
         protocol = self.registry.protocols[config.protocol_id](deepcopy(config.protocol_parameters))
         actors = {actor.id: actor for actor in world.actors}
-        policies = {
-            aid: self.registry.policies[actor.policy_id](deepcopy(actor.policy_parameters))
-            for aid, actor in actors.items()
-        }
-        for aid, policy in policies.items():
-            policy.configure_action_schemas(
-                {
-                    kind: self.registry.action_schemas[schema_id]
-                    for kind, schema_id in actors[aid].action_space.schemas.items()
-                }
-            )
-        mechanism.validate_config(world.model_copy(deep=True))
-        state = WorldState(
-            tick=0,
-            phase=protocol.initial_phase(),
-            public=world.initial_public_state,
-            private={aid: world.initial_private_state.get(aid, PrivateState()) for aid in actors},
-        ).model_copy(deep=True)
+        policies = {aid: self.registry.create_policy(actor) for aid, actor in actors.items()}
+        state = initial_state(config, protocol)
         state = validate_state(state, set(actors))
         mechanism.validate_state(world.model_copy(deep=True), state.model_copy(deep=True))
         events = [Event(sequence=0, kind="initialized", state=state.model_copy(deep=True))]
@@ -67,7 +50,7 @@ class SimulationRuntime:
             model_calls: list[ModelCallRecord] = []
             for aid in active:
                 actor = actors[aid]
-                permissions = config.permissions.get(aid, ObservationPermissions())
+                permissions = permissions_for(config, aid, state.phase)
                 observation = observe(actor, state, permissions)
                 policy = policies[aid]
                 if policy.required_observation_fields() - observation.visible.keys():

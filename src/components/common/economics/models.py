@@ -10,6 +10,7 @@ from simulation_core.economics import (
     AllocationRule,
     CostModel,
     DemandModel,
+    InverseDemandModel,
     MarketAllocation,
     ProfitModel,
 )
@@ -77,3 +78,22 @@ class LowestPriceAllocation(AllocationRule):
             total_quantity=quantity,
             quantities={aid: quantity / len(winners) if aid in winners else 0.0 for aid in prices},
         )
+
+
+class LinearInverseDemand(FrozenModel, InverseDemandModel):
+    a: float = Field(gt=0)
+    b: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def finite_choke_quantity(self) -> Self:
+        if not isfinite(self.a / self.b):
+            raise ValueError("Choke quantity must be finite")
+        return self
+
+    @property
+    def choke_quantity(self) -> float:
+        return self.a / self.b
+
+    def price(self, total_quantity: float) -> float:
+        nonnegative_finite(total_quantity)
+        return max(0.0, self.a - self.b * total_quantity)
