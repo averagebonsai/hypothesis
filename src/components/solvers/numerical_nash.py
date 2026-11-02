@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from itertools import islice, product
+from math import isfinite
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,7 +13,14 @@ from components.common.math.scalar import (
     OptimizationBudgetExceeded,
     ScalarSearchSettings,
 )
+from components.solvers.requirements import PURE_PAYOFFS, VIEW
 from components.solvers.response import scalar_best_response
+from simulation_core.contracts import (
+    MethodContract,
+    MethodRequirement,
+    RequirementEvidence,
+    checked,
+)
 from simulation_core.domains import ScalarInterval
 from simulation_core.solver import (
     BestResponseResult,
@@ -38,29 +46,81 @@ class NumericalNashParameters(FrozenModel):
 
 class NumericalNashSolver(Solver):
     required_game_type = DifferentiableScalarGameView
+    result_certification = "numerical"
+    profile_domain = "continuous"
+    contract = MethodContract(
+        name="Multistart scalar numerical Nash search",
+        requirements=(
+            VIEW,
+            PURE_PAYOFFS,
+            MethodRequirement(
+                id="finite_scalar_boxes",
+                description="Each actor chooses one scalar in an ordered finite interval with representable finite width; actor IDs are unique",
+            ),
+            MethodRequirement(
+                id="correct_smooth_gradients",
+                enforcement="conditional",
+                description="Own-payoff gradients are correct and sufficiently smooth for the projected-gradient root search",
+            ),
+        ),
+        guarantees=(
+            "Returned candidates pass the configured numerical unilateral-deviation searches within payoff tolerance",
+        ),
+        limitations=(
+            "No requirement or certification of global convexity/concavity",
+            "No proof of a global best response, uniqueness, completeness, or equilibrium existence",
+            "Independent searches can still miss the same narrow profitable deviation",
+            "Convergence and sampled derivative checks do not establish global mathematical properties",
+            "Budgets are per search, not a total wall-clock or aggregate objective budget",
+        ),
+    )
+
+    def requirement_evidence(
+        self, game: GameView, parameters: dict[str, JsonValue]
+    ) -> tuple[RequirementEvidence, ...]:
+        evidence = super().requirement_evidence(game, parameters)
+        NumericalNashParameters.from_json_values(parameters)
+        if not isinstance(game, DifferentiableScalarGameView):
+            return evidence
+        try:
+            self.validate_game(game)
+        except (ValueError, TypeError) as exc:
+            return (*evidence, checked("finite_scalar_boxes", False, str(exc)))
+        return (
+            *evidence,
+            checked(
+                "finite_scalar_boxes",
+                True,
+                "Actor identity and finite interval constraints checked without searching payoffs",
+            ),
+        )
 
     def validate_game(self, game: GameView) -> None:
         super().validate_game(game)
-        assert isinstance(game, DifferentiableScalarGameView)
+        if not isinstance(game, DifferentiableScalarGameView):
+            raise TypeError("Differentiable scalar game required")
         ids = game.actor_ids()
         if not ids or len(set(ids)) != len(ids):
             raise ValueError("Scalar game requires unique actors and nonempty domains")
         for aid in ids:
             lower, upper = game.action_bounds(aid)
             ScalarInterval(lower=lower, upper=upper)
+            if not isfinite(upper - lower):
+                raise ValueError("Scalar interval width must be representable and finite")
 
     def best_responses(
         self, game: GameView, profile: Sequence[Action], parameters: dict[str, JsonValue]
     ) -> dict[str, BestResponseResult]:
         self.validate_game(game)
-        assert isinstance(game, DifferentiableScalarGameView)
+        if not isinstance(game, DifferentiableScalarGameView):
+            raise TypeError("Differentiable scalar game required")
         settings = NumericalNashParameters.from_json_values(parameters)
         return {
             aid: scalar_best_response(game, aid, profile, settings.best_response, cross_check=True)
             for aid in game.actor_ids()
         }
 
-    def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
+    def _solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         settings = NumericalNashParameters.model_validate(parameters)
         if not isinstance(game, DifferentiableScalarGameView):
             return SolveResult(

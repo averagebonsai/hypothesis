@@ -1,0 +1,61 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "Demonstrate vector feasibility, a scripted off-optimum decision, and a separate exact benchmark; all values are illustrative",
+    "supplied_inputs": [],
+    "requirements": []
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "allocator",
+          "kind": "allocator",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "allocate": "experimental.vector_allocation.action.v1"
+            }
+          },
+          "policy_id": "scripted.v1",
+          "policy_parameters": {
+            "kind": "allocate",
+            "payload": {
+              "allocation": [
+                5.0,
+                5.0
+              ]
+            }
+          }
+        }
+      ],
+      "parameters": {
+        "budget": 10.0,
+        "target": [
+          8.0,
+          6.0
+        ]
+      },
+      "initial_public_state": {},
+      "initial_private_state": {}
+    },
+    "mechanism_id": "experimental.vector_allocation.v1",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "rounds": 1
+    },
+    "permissions": {},
+    "phase_permissions": {},
+    "benchmark": {
+      "solver_id": "experimental.vector_allocation.solver.v1",
+      "game_view_id": "experimental.vector_allocation.v1",
+      "parameters": {},
+      "information_assumption": "complete_information",
+      "comparison_tick": null
+    },
+    "max_steps": 1,
+    "assumptions": []
+  }
+}

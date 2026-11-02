@@ -1,0 +1,281 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "allocation_trial",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Allocate fixed budget to stay close to desired allocation; scripted fixture plus separate optimizer benchmark",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "vector_action",
+          "description": "Vector allocation action",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [
+            "nonnegative",
+            "dimension>=2"
+          ],
+          "timing": "one simultaneous round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No reusable vector allocation action schema exists; need target-length validation",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "budget_mechanism",
+          "description": "Fixed-sum allocation scoring",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [
+            "sum equals budget"
+          ],
+          "timing": "one simultaneous round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No reusable mechanism implements fixed-sum simplex with squared-distance payoff; recording has no utilities",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "analytic_optimum",
+          "description": "Analytic single-actor optimum",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [
+            "analytic certificate"
+          ],
+          "timing": "benchmark only",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Continuous vector problem needs analytic projection; finite pure_nash enumeration unsuitable; keep scripted [5,5] primary and compute optimizer separately",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.allocation_trial.alloc_action",
+      "kind": "action_schema",
+      "purpose": "Vector allocation payload with dimension >=2 validated against world target length",
+      "gap_id": "vector_action",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.alloc_schema:AllocationPayload",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "allocation"
+        ]
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allocation": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "allocation"
+        ]
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_alloc_action_schema",
+          "category": "interface",
+          "expected": "allocation payload schema validates fixture vector and rejects wrong dimension",
+          "reference": "problem variables allocation vector"
+        },
+        {
+          "name": "test_alloc_action_rejects",
+          "category": "failure",
+          "expected": "negative entries and wrong shapes are rejected",
+          "reference": "problem lower bound 0"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_trial.mechanism",
+      "kind": "mechanism",
+      "purpose": "Fixed-sum allocation mechanism scoring negative squared distance to target",
+      "gap_id": "budget_mechanism",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.mechanism:AllocationMechanism",
+      "input_schema": {
+        "properties": {
+          "budget": {
+            "type": "number"
+          },
+          "target": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          }
+        }
+      },
+      "output_schema": {
+        "properties": {
+          "metrics": {
+            "type": "object"
+          },
+          "payoffs": {
+            "type": "object"
+          }
+        }
+      },
+      "dependencies": [
+        "experimental.allocation_trial.alloc_action"
+      ],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_payoff",
+          "category": "functional",
+          "expected": "transition records allocation and payoff equals negative squared distance when budget exact",
+          "reference": "problem objectives score"
+        },
+        {
+          "name": "test_mechanism_validates_budget",
+          "category": "failure",
+          "expected": "budget-violating and negative allocations are rejected",
+          "reference": "problem constraints fixed_budget"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_trial.game_view",
+      "kind": "game_view",
+      "purpose": "Isolated evaluator over allocation profiles for benchmark",
+      "gap_id": "budget_mechanism",
+      "parent_interface": "simulation_core.solver.GameView",
+      "symbol": "experiment_extension.game_view:AllocationGameView",
+      "input_schema": {
+        "properties": {
+          "profile": {
+            "type": "array"
+          }
+        }
+      },
+      "output_schema": {
+        "properties": {
+          "payoffs": {
+            "type": "object"
+          }
+        }
+      },
+      "dependencies": [
+        "experimental.allocation_trial.mechanism"
+      ],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_game_view_evaluate",
+          "category": "interface",
+          "expected": "game view evaluates profiles and exposes feasible allocation set",
+          "reference": "problem evaluation deterministic"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_trial.solver",
+      "kind": "solver",
+      "purpose": "Analytic single-actor optimum via water-filling projection; not a multiplayer equilibrium",
+      "gap_id": "analytic_optimum",
+      "parent_interface": "simulation_core.solver.Solver",
+      "symbol": "experiment_extension.solver:AllocationSolver",
+      "input_schema": {
+        "properties": {
+          "parameters": {
+            "type": "object"
+          }
+        }
+      },
+      "output_schema": {
+        "properties": {
+          "actions": {
+            "type": "array"
+          },
+          "outcome": {
+            "type": "object"
+          }
+        }
+      },
+      "dependencies": [
+        "experimental.allocation_trial.game_view"
+      ],
+      "method_contract": {
+        "name": "Simplex projection optimum",
+        "requirements": [
+          {
+            "id": "view",
+            "description": "Game view capability available",
+            "enforcement": "required"
+          },
+          {
+            "id": "valid_inputs",
+            "description": "Positive budget and finite target vector of dimension >=2",
+            "enforcement": "required"
+          }
+        ],
+        "guarantees": [
+          "Analytic projection of target onto fixed-sum nonnegative simplex is the single-actor optimum"
+        ],
+        "limitations": [
+          "Single-actor optimum only; not a multiplayer equilibrium",
+          "Applies to squared-distance objective with sum equality and nonnegativity"
+        ]
+      },
+      "acceptance_tests": [
+        {
+          "name": "test_solver_optimum",
+          "category": "mathematical",
+          "expected": "solver returns projection of target onto budget simplex with analytic certificate",
+          "reference": "problem score maximize"
+        },
+        {
+          "name": "test_benchmark_separate",
+          "category": "integration",
+          "expected": "solver optimum differs from scripted fixture but fixture action is preserved in run",
+          "reference": "requirements scripted fixture"
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [
+    "simultaneous.v1",
+    "scripted.v1"
+  ],
+  "repair_counts": {}
+}

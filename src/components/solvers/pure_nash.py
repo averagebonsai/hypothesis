@@ -6,6 +6,13 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
+from components.solvers.requirements import PURE_PAYOFFS, VIEW
+from simulation_core.contracts import (
+    MethodContract,
+    MethodRequirement,
+    RequirementEvidence,
+    checked,
+)
 from simulation_core.solver import Equilibrium, FiniteGameView, GameView, Solver, SolveResult
 from simulation_core.types import FrozenModel
 
@@ -17,8 +24,66 @@ class PureNashParameters(FrozenModel):
 
 class PureNashSolver(Solver):
     required_game_type = FiniteGameView
+    contract = MethodContract(
+        name="Exhaustive finite pure-Nash enumeration",
+        requirements=(
+            VIEW,
+            PURE_PAYOFFS,
+            MethodRequirement(
+                id="finite_actions",
+                description="Unique actors, finite nonempty correctly owned action lists",
+            ),
+            MethodRequirement(
+                id="enumeration_budget",
+                enforcement="conditional",
+                description="The profile budget permits complete enumeration",
+            ),
+        ),
+        guarantees=(
+            "After complete enumeration: all pure equilibria within payoff tolerance, or absence of a pure equilibrium in the supplied finite game",
+        ),
+        limitations=(
+            "No mixed-strategy result",
+            "No convexity, concavity, continuity, or differentiability requirement",
+            "Budget exhaustion gives no existence conclusion",
+            "Floating-point payoffs and configured tolerance qualify the result",
+        ),
+    )
 
-    def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
+    def requirement_evidence(
+        self, game: GameView, parameters: dict[str, JsonValue]
+    ) -> tuple[RequirementEvidence, ...]:
+        evidence = super().requirement_evidence(game, parameters)
+        settings = PureNashParameters.from_json_values(parameters)
+        if not isinstance(game, FiniteGameView):
+            return evidence
+        ids = game.actor_ids()
+        choices = [game.actions(aid) for aid in ids]
+        valid = (
+            bool(ids)
+            and len(set(ids)) == len(ids)
+            and all(choices)
+            and all(
+                len({action.model_dump_json() for action in actions}) == len(actions)
+                for actions in choices
+            )
+            and all(
+                action.actor_id == aid for aid, actions in zip(ids, choices) for action in actions
+            )
+        )
+        return (
+            *evidence,
+            checked(
+                "finite_actions", valid, "Action domains enumerated without evaluating payoffs"
+            ),
+            checked(
+                "enumeration_budget",
+                prod(len(actions) for actions in choices) <= settings.max_profiles,
+                "Cartesian profile count compared with max_profiles; exhaustion remains a separate result status",
+            ),
+        )
+
+    def _solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         params = PureNashParameters.model_validate(parameters)
         if not isinstance(game, FiniteGameView):
             return SolveResult(
@@ -43,6 +108,8 @@ class PureNashSolver(Solver):
         payoffs = {
             key: game.evaluate(tuple(choices[i][j] for i, j in enumerate(key))) for key in profiles
         }
+        if any(set(outcome.payoffs) != set(ids) for outcome in payoffs.values()):
+            raise ValueError("Finite payoff evaluation must return exactly all actors' payoffs")
         equilibria = []
         for key in profiles:
             outcome = payoffs[key]

@@ -512,3 +512,44 @@ centralizes the examples' bounded gateway and trusted job setup; live provider
 selection uses the existing configured_gateway helper throughout. Defensive
 copies, canonical snapshots, actor-specific private state, and execution-boundary
 revalidation remain in place.
+
+
+Method assumptions and applicability
+------------------------------------
+
+Solvers now expose typed method contracts listing requirements, conditional
+guarantees, and limitations. Registry discovery includes `solver_contracts`;
+`registry.benchmark_applicability(config)` assesses the selected method without
+actor calls or a solver search. Every built-in solver result retains an
+`applicability` report. Scalar numerical searches expose the same contract
+mechanism. Required false or unverified conditions block execution; unresolved
+conditional assumptions remain visible without being promoted to proofs.
+
+See [the method contract guide](docs/method_contracts.md) for the audited current
+methods, APIs, evidence levels, and future convex-method examples. Solver
+extensions implement `_solve` under the shared public precondition-checking
+`solve` template. Positive numerical samples do not establish global convexity.
+
+
+External coding-agent tools and isolated extensions
+--------------------------------------------------
+
+`agent_tools` supplies typed gap/spec contracts, capability inventory, immutable
+versioned bundle sealing, and Docker validation/execution tools for an external
+coding agent. Experimental code remains outside src, in
+`experimental_components/<experiment>/<version>`. It is never imported on the
+host or added automatically to the global registry. Docker sbx's private engine
+is supported through `--sandbox`; ordinary Docker is supported without it.
+
+See [the experimental workflow](docs/experimental_workflow.md) and
+[prompts/newsimulation.md](prompts/newsimulation.md). The retained vector-allocation
+trial demonstrates a vector decision with a coupled budget constraint, a separate
+analytical optimum, contract tests, and actual worker restrictions.
+
+`ExperimentRequest.problem` now accepts a typed numeric problem with scalar/vector
+variables, objectives, and constraints; see [structured problems](docs/problem_statements.md).
+The optional `CodingAgent` adapter injects [its system instructions](prompts/blind_coding_agent.md)
+and a curated source inventory into bounded, auditable API calls, without exposing
+old experiment bundles. The [first live coding trial](experimental_components/allocation_trial/TRIAL.md)
+made five actual model calls and failed validation; it is retained as a failed
+submission, with no claimed simulation result.

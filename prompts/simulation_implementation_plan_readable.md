@@ -823,3 +823,83 @@ payload schema classes; nonsegmented demand; retained segmented conservation;
 negative general scalar coordinates; neutral analysis results; consistent numerical
 settings; and explicit numerical uncertainty. Run all regressions and notebooks
 offline, preserving saved live outputs and making no live calls for cleanup.
+
+
+## 23. Explicit method assumptions and guarantee scope
+
+Audit solver and scalar-search assumptions. Expose typed MethodContract,
+MethodRequirement, RequirementEvidence, and ApplicabilityReport models. Contracts
+list assumptions, conditional guarantees, and limitations in registry discovery.
+Separate required execution conditions from conditional mathematical assumptions;
+missing evidence stays unverified. Preserve a report on every built-in solver
+result, including unsupported/budget-exhausted/expected failed results.
+
+The shared Solver.solve template assesses requirements and invokes subclass
+_solve only when required conditions are verified. Keep unsupported theorem
+applicability separate from primary actor results. Allow no-search per-config
+benchmark assessment. Retain explicit runtime exceptions instead of relying on
+assertions, including when Python optimization is enabled.
+
+Known-model definitions may justify standard market rules; do not extend those
+justifications automatically to subclasses. The framework records trusted
+analytical arguments but is not a formal proof checker. Declarations and positive
+sampled tests cannot be labeled verified mathematical evidence; counterexamples
+may refute properties. Required unknown convexity in a future method blocks it.
+
+No current solver requires generic global convexity. Finite enumeration needs
+finite action lists and complete deterministic payoffs; analytical market methods
+require their explicit model conditions; Stackelberg uses analytic branches;
+numerical Nash/scalar searches retain limited numerical candidate guarantees.
+Determinism, purity, smoothness, and global properties of arbitrary functions are
+not inferred from type membership or optimizer convergence.
+
+Document the audit and extension examples in docs/method_contracts.md. Verify
+requirements, evidence integrity, unknown/violated guards, optimized-Python
+execution, failed-result provenance, JSON roundtrips, existing experiments, and
+all notebooks offline. Preserve saved live outputs and make no live calls.
+
+
+## 24. External coding-agent tools and isolated experimental bundles
+
+The user selected an external coding agent following an SOP, an actual Docker
+worker, and retained versioned bundles under experimental_components outside src.
+No autonomous model-calling generator or repair controller is introduced.
+
+Provide typed capability/gap reports, extension specifications with approved
+parents and typed domain schemas, assumption contracts, dependency references,
+and grounded acceptance cases. Registry and shared-tool inventory expose known
+shape constraints; obvious scalar/vector mismatches are rejected. Missing
+implementation maps to EXTEND; critical missing information or interface gaps
+remain UNSUPPORTED/review. Metadata absence is unknown compatibility.
+
+Host tools treat source as bytes, never import it, reject links and unexpected
+files, seal exact source/spec/test inventories, and stage immutable snapshots.
+Changes to sealed bytes require a new version. Record two repairs at most per
+identified failure; the external agent owns the repair loop and its history.
+
+Support Docker Engine directly and through Docker sbx's private engine in a
+mountless shell VM. Copy only an explicit trusted build context; exclude .env,
+Git, coding-agent settings, and experimental source. Build locked dependencies
+before extension code is loaded. Resolve image tags to immutable image IDs and
+bind receipts to trusted framework/dependency content. Provide inline type
+markers so installed toolkit parents remain statically checkable by extensions.
+
+Experimental imports, lint/type checks, tests, registry overlays, and actual
+execution occur only in a nonroot, read-only, network-disabled container with
+CPU, memory, PID, output, and wall-clock limits. Do not pass host Docker sockets
+or credentials. Retain the original runtime and canonical event flow inside
+the worker. Passing tests never permits host execution or global promotion.
+The first worker is offline; live LLM access would require a separate broker.
+
+Keep source bundles and example fixtures outside src; retain run receipts and
+results locally under experimental_components/_runs, ignored by Git because
+they may contain private state. Delete per-run transport manifests/staging and
+remove inner containers on success or failure. A reusable sandbox/image can
+remain available for further trials.
+
+Trial a vector allocation constrained to a fixed-budget simplex, with a separate
+analytical projection benchmark and independent tests. Reuse the existing
+scripted policy, simultaneous protocol, evaluation adapter, benchmark runner,
+and method contracts without editing core runtime or global registry. Document
+that the scripted action is a fixture and the one-actor Nash optimum is simply
+that actor's own optimum. Do not claim general vector optimization support.

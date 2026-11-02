@@ -2,11 +2,18 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, final
 
 from pydantic import Field, JsonValue
 
 from .analysis import AnalysisResult
+from .contracts import (
+    ApplicabilityReport,
+    MethodContract,
+    MethodRequirement,
+    RequirementEvidence,
+    checked,
+)
 from .types import Action, Event, FrozenModel, Outcome
 
 
@@ -96,6 +103,7 @@ class SolveResult(AnalysisResult):
     status: Literal[
         "solved", "multiple", "no_pure_equilibrium", "budget_exhausted", "unsupported", "failed"
     ]
+    applicability: ApplicabilityReport | None = None
     equilibria: tuple[Equilibrium, ...] = ()
     profile_domain: Literal["finite", "continuous"] = "finite"
     profiles_evaluated: int | None = Field(default=0, ge=0)
@@ -196,6 +204,29 @@ class Solver(ABC):
     """Game-equilibrium analysis. Compatibility checking never runs the search."""
 
     required_game_type: ClassVar[type[GameView] | None] = None
+    result_certification: ClassVar[Literal["analytic", "numerical"]] = "analytic"
+    solution_concept: ClassVar[Literal["pure_nash", "subgame_perfect"]] = "pure_nash"
+    profile_domain: ClassVar[Literal["finite", "continuous"]] = "finite"
+    contract: ClassVar[MethodContract] = MethodContract(
+        name="Unspecified equilibrium method",
+        requirements=(MethodRequirement(id="view", description="Required game-view capability"),),
+        limitations=("No method-specific guarantees have been declared",),
+    )
+
+    def requirement_evidence(
+        self, game: GameView, parameters: dict[str, JsonValue]
+    ) -> tuple[RequirementEvidence, ...]:
+        return (
+            checked(
+                "view",
+                self.required_game_type is None or isinstance(game, self.required_game_type),
+                "Game-view capability checked against the solver contract",
+            ),
+        )
+
+    def assess(self, game: GameView, parameters: dict[str, JsonValue]) -> ApplicabilityReport:
+        """No search or actor calls; unknown mathematical properties stay unverified."""
+        return self.contract.assess(self.requirement_evidence(game, parameters))
 
     def validate_game(self, game: GameView) -> None:
         if self.required_game_type is not None and not isinstance(game, self.required_game_type):
@@ -213,8 +244,36 @@ class Solver(ABC):
             else {}
         )
 
+    @final
+    def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
+        report = self.assess(game, parameters)
+        if not report.can_execute:
+            return SolveResult(
+                status="unsupported",
+                certification=self.result_certification,
+                solution_concept=self.solution_concept,
+                profile_domain=self.profile_domain,
+                profiles_evaluated=None,
+                total_profiles=None,
+                applicability=report,
+                diagnostics={"reason": "Required method assumptions are violated or unverified"},
+            )
+        try:
+            result = self._solve(game, parameters)
+        except (ArithmeticError, ValueError) as exc:
+            result = SolveResult(
+                status="failed",
+                certification=self.result_certification,
+                solution_concept=self.solution_concept,
+                profile_domain=self.profile_domain,
+                profiles_evaluated=None,
+                total_profiles=None,
+                diagnostics={"error_category": type(exc).__name__},
+            )
+        return result.model_copy(update={"applicability": report}, deep=True)
+
     @abstractmethod
-    def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult: ...
+    def _solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult: ...
 
 
 def deviation_regrets(game: GameView, profile: Sequence[Action]) -> dict[str, float]:

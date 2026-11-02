@@ -6,7 +6,20 @@ __pycache__/
 .ruff_cache/
 .ipynb_checkpoints/
 dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Local coverage outputs.
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 .mypy_cache/
 .env.*
 !.env.example
+
+# Local experimental receipts may contain private state. Retain locally, export deliberately.
+experimental_components/_runs/
+experimental_components/_authoring/

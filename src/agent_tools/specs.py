@@ -1,0 +1,203 @@
+"""Data-only contracts for an external coding agent's extension workflow."""
+
+from typing import Literal, Self
+
+from pydantic import Field, JsonValue, model_validator
+
+from simulation_core.contracts import MethodContract
+from simulation_core.execution import JobResult
+from simulation_core.types import FrozenModel
+
+ComponentKind = Literal[
+    "policy",
+    "mechanism",
+    "protocol",
+    "solver",
+    "game_view",
+    "action_schema",
+    "parameter_schema",
+    "utility",
+]
+PARENTS = {
+    "policy": "simulation_core.policy.Policy",
+    "mechanism": "simulation_core.mechanism.Mechanism",
+    "protocol": "simulation_core.protocol.ProtocolRules",
+    "solver": "simulation_core.solver.Solver",
+    "game_view": "simulation_core.solver.GameView",
+    "action_schema": "pydantic.BaseModel",
+    "parameter_schema": "pydantic.BaseModel",
+    "utility": "typing.Callable",
+}
+
+
+class CapabilityRequirement(FrozenModel):
+    id: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    action_shape: Literal["none", "finite", "scalar", "vector", "mixed", "unknown"]
+    dimensions_per_actor: dict[str, int] = Field(default_factory=dict)
+    constraints: tuple[str, ...] = ()
+    timing: str = "unspecified"
+    evaluation: Literal["deterministic", "stochastic", "unknown"] = "unknown"
+    required_guarantees: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def positive_dimensions(self) -> Self:
+        if any(value <= 0 for value in self.dimensions_per_actor.values()):
+            raise ValueError("Actor decision dimensions must be positive")
+        return self
+
+
+class CapabilityDecision(FrozenModel):
+    requirement: CapabilityRequirement
+    disposition: Literal["REUSE", "COMPOSE", "EXTEND", "UNSUPPORTED"]
+    selected_components: tuple[str, ...] = ()
+    reason: str = Field(min_length=1)
+    unresolved: tuple[str, ...] = ()
+    unsupported_reason: Literal["missing_information", "interface_gap"] | None = None
+
+    @model_validator(mode="after")
+    def classified_reason(self) -> Self:
+        if (self.disposition == "UNSUPPORTED") != (self.unsupported_reason is not None):
+            raise ValueError("UNSUPPORTED needs a missing-information or interface-gap reason")
+        if self.disposition in {"REUSE", "COMPOSE"} and not self.selected_components:
+            raise ValueError("Reuse/composition must name existing components")
+        return self
+
+
+class GapAnalysisReport(FrozenModel):
+    objective: str = Field(min_length=1)
+    decisions: tuple[CapabilityDecision, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_ids(self) -> Self:
+        ids = [decision.requirement.id for decision in self.decisions]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Duplicate capability requirement")
+        return self
+
+    @property
+    def ready(self) -> bool:
+        return not any(d.disposition == "UNSUPPORTED" or d.unresolved for d in self.decisions)
+
+
+class AcceptanceTest(FrozenModel):
+    name: str = Field(pattern=r"^test_[A-Za-z0-9_]+$")
+    category: Literal["interface", "functional", "mathematical", "integration", "failure"]
+    expected: str = Field(min_length=1)
+    reference: str = Field(min_length=1)
+
+
+class CustomComponentSpec(FrozenModel):
+    id: str = Field(pattern=r"^experimental\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*$")
+    kind: ComponentKind
+    purpose: str = Field(min_length=1)
+    gap_id: str
+    parent_interface: str
+    symbol: str = Field(
+        pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$"
+    )
+    input_schema: dict[str, JsonValue] = Field(min_length=1)
+    output_schema: dict[str, JsonValue] = Field(min_length=1)
+    dependencies: tuple[str, ...] = ()
+    method_contract: MethodContract | None = None
+    acceptance_tests: tuple[AcceptanceTest, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def approved_parent(self) -> Self:
+        if self.parent_interface != PARENTS[self.kind]:
+            raise ValueError("Use the approved parent for the component kind")
+        if self.kind in {"solver", "utility"} and self.method_contract is None:
+            raise ValueError("Mathematical tools must declare a method contract")
+        return self
+
+
+class BundleManifest(FrozenModel):
+    schema_version: Literal["experimental.bundle.v1"] = "experimental.bundle.v1"
+    experiment_id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    version: str = Field(pattern=r"^v[1-9][0-9]*$")
+    gap_analysis: GapAnalysisReport
+    components: tuple[CustomComponentSpec, ...] = Field(min_length=1)
+    existing_dependencies: tuple[str, ...] = ()
+    repair_counts: dict[str, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def references(self) -> Self:
+        exports = [(component.kind, component.id) for component in self.components]
+        if len(set(exports)) != len(exports):
+            raise ValueError("Duplicate component export")
+        gaps = {d.requirement.id for d in self.gap_analysis.decisions if d.disposition == "EXTEND"}
+        known = {c.id for c in self.components}
+        for component in self.components:
+            if component.gap_id not in gaps or not component.id.startswith(
+                f"experimental.{self.experiment_id}."
+            ):
+                raise ValueError("Extension must address an EXTEND gap in its experiment namespace")
+            if any(
+                dep.startswith("experimental.") and dep not in known
+                for dep in component.dependencies
+            ):
+                raise ValueError("Unknown experimental dependency")
+        if any(count < 0 or count > 2 for count in self.repair_counts.values()):
+            raise ValueError("At most two repairs per identified failure; escalate after that")
+        return self
+
+
+class BundleSeal(FrozenModel):
+    schema_version: Literal["experimental.seal.v1"] = "experimental.seal.v1"
+    files: dict[str, str]
+    digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class WorkerLimits(FrozenModel):
+    wall_seconds: int = Field(default=180, ge=10, le=900)
+    memory_mb: int = Field(default=2048, ge=512, le=8192)
+    cpus: int = Field(default=2, ge=1, le=4)
+    pids: int = Field(default=128, ge=32, le=256)
+    output_bytes: int = Field(default=4_000_000, ge=4096, le=16_000_000)
+
+
+class CheckResult(FrozenModel):
+    name: str
+    passed: bool
+    exit_code: int
+    output: str
+
+
+VALIDATION_CHECKS = frozenset(
+    {"ruff", "mypy", "acceptance", "regressions", "declared_acceptance", "composition"}
+)
+
+
+class WorkerResponse(FrozenModel):
+    bundle_digest: str
+    checks: tuple[CheckResult, ...]
+    result: JobResult | None = None
+    probe_results: tuple[JobResult, ...] = ()
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def valid_checks(self) -> Self:
+        names = [check.name for check in self.checks]
+        if len(set(names)) != len(names) or set(names) - VALIDATION_CHECKS:
+            raise ValueError("Worker checks must be distinct known validation stages")
+        if (self.result is not None or self.probe_results) and not self.passed:
+            raise ValueError("An experiment result requires all validation stages to pass")
+        return self
+
+    @property
+    def passed(self) -> bool:
+        return (
+            {check.name for check in self.checks} == VALIDATION_CHECKS
+            and all(check.passed for check in self.checks)
+            and self.error is None
+        )
+
+
+class RunReceipt(FrozenModel):
+    schema_version: Literal["experimental.receipt.v1"] = "experimental.receipt.v1"
+    bundle_digest: str
+    image_id: str
+    framework_digest: str
+    limits: WorkerLimits = Field(default_factory=WorkerLimits)
+    operation: Literal["validate", "run"]
+    response: WorkerResponse

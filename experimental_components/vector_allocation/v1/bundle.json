@@ -1,0 +1,596 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "vector_allocation",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Extend the toolkit to a vector action with coupled fixed-budget feasibility and a separate known optimum",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "execution",
+          "description": "One actor takes one schema-valid action with recorded state and isolated private data",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one simultaneous round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1",
+          "scripted.v1"
+        ],
+        "reason": "Generic scheduling and scripted policy accept arbitrary schema-declared JSON payloads",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "vector_objective",
+          "description": "Evaluate vector feasibility and quadratic score, then compute an independent optimum",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [
+            "nonnegative allocation",
+            "sum(allocation)=budget"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "global optimum for the specified quadratic simplex problem"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Existing scalar search cannot enforce a coupled simplex constraint. Reuse runtime, evaluation adapters, method contracts, and benchmark reporting; add the smallest vector mechanism, schemas, view, and analytical projection adapter.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.vector_allocation.v1",
+      "kind": "parameter_schema",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.allocation:AllocationParameters",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    },
+    {
+      "id": "experimental.vector_allocation.action.v1",
+      "kind": "action_schema",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.allocation:AllocationPayload",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "allocation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "allocation"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "allocation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "allocation"
+        ],
+        "additionalProperties": false
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    },
+    {
+      "id": "experimental.vector_allocation.v1",
+      "kind": "mechanism",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.allocation:AllocationMechanism",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "$defs": {
+          "JsonValue": {},
+          "Outcome": {
+            "additionalProperties": false,
+            "properties": {
+              "payoffs": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "title": "Payoffs",
+                "type": "object"
+              },
+              "metrics": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Metrics",
+                "type": "object"
+              }
+            },
+            "title": "Outcome",
+            "type": "object"
+          },
+          "PrivateState": {
+            "additionalProperties": false,
+            "properties": {
+              "facts": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Facts",
+                "type": "object"
+              },
+              "memory": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/JsonValue"
+                },
+                "title": "Memory",
+                "type": "object"
+              }
+            },
+            "title": "PrivateState",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "public": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "title": "Public",
+            "type": "object"
+          },
+          "outcome": {
+            "$ref": "#/$defs/Outcome"
+          },
+          "private_updates": {
+            "additionalProperties": {
+              "$ref": "#/$defs/PrivateState"
+            },
+            "title": "Private Updates",
+            "type": "object"
+          }
+        },
+        "required": [
+          "public"
+        ],
+        "title": "TransitionResult",
+        "type": "object"
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    },
+    {
+      "id": "experimental.vector_allocation.v1",
+      "kind": "game_view",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "simulation_core.solver.GameView",
+      "symbol": "experiment_extension.allocation:AllocationGameView",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "Read-only vector payoff evaluation and analytical best response"
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    },
+    {
+      "id": "experimental.vector_allocation.solver.v1",
+      "kind": "solver",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "simulation_core.solver.Solver",
+      "symbol": "experiment_extension.allocation:AllocationSolver",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "SolveResult with the single-actor optimal vector profile"
+      },
+      "dependencies": [],
+      "method_contract": {
+        "name": "Euclidean projection onto a fixed-budget simplex",
+        "requirements": [
+          {
+            "id": "view",
+            "description": "The allocation game view is available",
+            "enforcement": "required"
+          },
+          {
+            "id": "quadratic_simplex",
+            "description": "One vector actor maximizes negative squared distance to a fixed target on a nonnegative fixed-budget simplex",
+            "enforcement": "required"
+          }
+        ],
+        "guarantees": [
+          "The simplex projection is a global optimum of the specified quadratic allocation objective"
+        ],
+        "limitations": [
+          "Not an optimizer for arbitrary vector objectives or general nonlinear constraints",
+          "Floating-point arithmetic and feasibility tolerance apply",
+          "A one-actor Nash optimum is the actor's own optimum, not a multiplayer equilibrium claim"
+        ]
+      },
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    },
+    {
+      "id": "experimental.vector_allocation.projection.v1",
+      "kind": "utility",
+      "purpose": "Fixed-budget vector allocation using Euclidean simplex projection",
+      "gap_id": "vector_objective",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.allocation:project_simplex",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2
+          }
+        },
+        "required": [
+          "budget",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "dependencies": [],
+      "method_contract": {
+        "name": "Euclidean projection of a finite target onto a fixed-budget simplex",
+        "requirements": [
+          {
+            "id": "finite_parameters",
+            "description": "A finite vector of dimension at least two and a finite positive budget",
+            "enforcement": "required"
+          }
+        ],
+        "guarantees": [
+          "The sorting threshold yields the Euclidean simplex projection when arithmetic and feasibility checks succeed"
+        ],
+        "limitations": [
+          "Specific Euclidean projection, not arbitrary nonlinear optimization",
+          "Finite precision and feasibility tolerance apply"
+        ]
+      },
+      "acceptance_tests": [
+        {
+          "name": "test_known_projection",
+          "category": "functional",
+          "expected": "Known projections (6,4), (3,0), and (1,1)",
+          "reference": "Closed-form simplex threshold calculation"
+        },
+        {
+          "name": "test_invalid_projection_inputs",
+          "category": "failure",
+          "expected": "Reject negative budget and nonfinite target",
+          "reference": "Declared finite positive budget schema"
+        },
+        {
+          "name": "test_optimum_dominates_independent_feasible_grid",
+          "category": "mathematical",
+          "expected": "No feasible grid point exceeds score -8",
+          "reference": "Independent one-variable quadratic with x2=10-x1"
+        },
+        {
+          "name": "test_primary_action_is_preserved_against_separate_optimum",
+          "category": "integration",
+          "expected": "Primary (5,5) scores -10, optimum (6,4) scores -8, regret 2",
+          "reference": "Independent analytical projection; current runtime and benchmark contracts"
+        },
+        {
+          "name": "test_worker_restrictions",
+          "category": "interface",
+          "expected": "Nonroot, read-only code/bundle, no socket/credentials/network, bounded pids",
+          "reference": "Trusted Docker worker run options"
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [
+    "pydantic"
+  ],
+  "repair_counts": {}
+}

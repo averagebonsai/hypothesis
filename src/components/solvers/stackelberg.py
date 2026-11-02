@@ -4,7 +4,14 @@ from itertools import pairwise
 
 from pydantic import Field, JsonValue
 
-from components.mechanisms.stackelberg import StackelbergGameView
+from components.common.economics.models import LinearInverseDemand, RevenueMinusCost
+from components.mechanisms.stackelberg import StackelbergGameView, StackelbergMechanism
+from components.solvers.requirements import PURE_PAYOFFS, VIEW, model_evidence
+from simulation_core.contracts import (
+    MethodContract,
+    MethodRequirement,
+    RequirementEvidence,
+)
 from simulation_core.solver import Equilibrium, GameView, Solver, SolveResult
 from simulation_core.types import FrozenModel
 
@@ -15,8 +22,62 @@ class BackwardInductionParameters(FrozenModel):
 
 class StackelbergBackwardInductionSolver(Solver):
     required_game_type = StackelbergGameView
+    solution_concept = "subgame_perfect"
+    profile_domain = "continuous"
+    contract = MethodContract(
+        name="Bounded linear Stackelberg backward induction",
+        requirements=(
+            VIEW,
+            PURE_PAYOFFS,
+            MethodRequirement(
+                id="linear_quantity_rules",
+                description="Two quantity firms, P=max(a-bQ,0), a,b>0, nonnegative constant costs, finite nonnegative quantity intervals",
+            ),
+            MethodRequirement(
+                id="continuation_rule",
+                description="Irrevocable leader commitment, observed by the follower; follower chooses a global best response, minimum quantity on zero-profit ties",
+            ),
+        ),
+        guarantees=(
+            "Leader optimum along the specified follower-response curve, represented by analytic maximizing candidates and any optimal zero-profit intervals",
+            "Subgame-perfect benchmark under the specified follower continuation",
+        ),
+        limitations=(
+            "No global concavity assumption: optimization splits at follower-bound and zero-price branches",
+            "Does not enumerate all follower strategies under alternative tie rules",
+            "Behavioral LLM actions need not satisfy the rational benchmark's assumptions",
+            "Floating-point arithmetic and payoff tolerance apply",
+        ),
+    )
 
-    def solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
+    def requirement_evidence(
+        self, game: GameView, parameters: dict[str, JsonValue]
+    ) -> tuple[RequirementEvidence, ...]:
+        evidence = super().requirement_evidence(game, parameters)
+        BackwardInductionParameters.from_json_values(parameters)
+        if not isinstance(game, StackelbergGameView):
+            return evidence
+        standard = (
+            type(game) is StackelbergGameView
+            and type(game.mechanism) is StackelbergMechanism
+            and type(game.parameters.demand) is LinearInverseDemand
+            and type(game.mechanism.profit) is RevenueMinusCost
+        )
+        return (
+            *evidence,
+            model_evidence(
+                "linear_quantity_rules",
+                standard,
+                "Encoded by validated StackelbergParameters and the standard market mechanism",
+            ),
+            model_evidence(
+                "continuation_rule",
+                standard,
+                "The standard view implements the bounded analytical follower response and explicit minimum-quantity tie rule; this is a benchmark convention, not observed LLM rationality",
+            ),
+        )
+
+    def _solve(self, game: GameView, parameters: dict[str, JsonValue]) -> SolveResult:
         settings = BackwardInductionParameters.from_json_values(parameters)
         if not isinstance(game, StackelbergGameView):
             return SolveResult(

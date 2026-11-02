@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import Field, JsonValue, field_validator
 
+from .problems import ProblemStatement
 from .provenance import pointer_tokens
 from .types import FrozenModel
 
@@ -26,6 +27,7 @@ class SuppliedInput(FrozenModel):
 class ExperimentRequest(FrozenModel):
     schema_version: Literal["experiment.request.v1"] = "experiment.request.v1"
     hypothesis: str = Field(min_length=1)
+    problem: ProblemStatement | None = None
     supplied_inputs: tuple[SuppliedInput, ...] = ()
     requirements: tuple[str, ...] = ()
     # No automatic assumption generation or component selection occurs in this DTO.

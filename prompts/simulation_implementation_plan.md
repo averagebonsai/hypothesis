@@ -302,3 +302,16 @@ compatibility checks, general demand/result/domain contracts, honest numerical
 candidate semantics, consistent best-response settings, and small shared adapters
 and host job helpers. It precedes the unfamiliar-task capability and extension
 workflow. Existing game-specific benchmark orchestration remains scoped as such.
+
+
+Readable plan section 23 adds explicit method contracts, evidence levels,
+required versus conditional preconditions, no-search applicability reports, and
+a shared Solver.solve template that invokes _solve after checks. The method
+audit and usage are documented in docs/method_contracts.md. No generic convexity
+proof or new optimization algorithm is implied.
+
+
+Readable plan section 24 records external-agent tooling, Docker/sbx workers,
+versioned experimental bundles outside src, and a vector-allocation trial. The
+host never imports extension source, and passing tests does not permit host
+execution or global registration. See docs/experimental_workflow.md.

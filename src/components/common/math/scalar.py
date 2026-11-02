@@ -8,7 +8,68 @@ from numpy.typing import NDArray
 from pydantic import AliasChoices, Field
 from scipy.optimize import minimize_scalar, shgo
 
+from simulation_core.contracts import (
+    ApplicabilityReport,
+    MethodContract,
+    MethodRequirement,
+    checked,
+)
 from simulation_core.types import FrozenModel
+
+SCALAR_SEARCH_CONTRACT = MethodContract(
+    name="Bounded scalar numerical maximization",
+    requirements=(
+        MethodRequirement(
+            id="bounds",
+            description="A finite scalar interval with lower < upper and representable finite width",
+        ),
+        MethodRequirement(
+            id="current", description="The current candidate is finite and inside the interval"
+        ),
+        MethodRequirement(
+            id="pure_objective",
+            enforcement="conditional",
+            description="The objective is deterministic and side-effect-free; caching repeated coordinates is valid",
+        ),
+        MethodRequirement(
+            id="local_regularity",
+            enforcement="conditional",
+            description="The objective has suitable local regularity for bounded minimization and SHGO's local refinement",
+        ),
+        MethodRequirement(
+            id="finite_samples",
+            enforcement="conditional",
+            description="Every actually evaluated objective value is finite",
+        ),
+    ),
+    guarantees=(
+        "A feasible best-found candidate among the evaluated points, with a per-search evaluation budget",
+    ),
+    limitations=(
+        "Finite samples and local convergence do not prove a global optimum",
+        "Bounded local refinement does not establish unimodality of any searched interval",
+        "No convexity or concavity certificate is produced",
+        "Sobol SHGO with fixed sampling/iterations is an independent numerical check, not a global certificate",
+    ),
+)
+
+
+def assess_scalar_search(bounds: tuple[float, float], current: float) -> ApplicabilityReport:
+    lower, upper = bounds
+    return SCALAR_SEARCH_CONTRACT.assess(
+        (
+            checked(
+                "bounds",
+                isfinite(lower) and isfinite(upper) and lower < upper and isfinite(upper - lower),
+                "Finite ordered scalar bounds checked",
+            ),
+            checked(
+                "current",
+                isfinite(current) and lower <= current <= upper,
+                "Current candidate feasibility checked",
+            ),
+        )
+    )
 
 
 class OptimizationBudgetExceeded(ArithmeticError):
@@ -24,6 +85,7 @@ class ScalarSearchSettings(FrozenModel):
 
 
 class ScalarMaximum(FrozenModel):
+    applicability: ApplicabilityReport | None = None
     value: float
     objective_value: float = Field(validation_alias=AliasChoices("objective_value", "payoff"))
     evaluations: int
@@ -43,9 +105,9 @@ def maximize_scalar(
     current: float,
     independent: bool = False,
 ) -> ScalarMaximum:
+    report = assess_scalar_search(bounds, current)
+    report.require_execution()
     low, high = bounds
-    if not isfinite(low) or not isfinite(high) or not low < high:
-        raise ValueError("Scalar search requires ordered finite bounds")
     calls = 0
     cache: dict[float, float] = {}
 
@@ -111,7 +173,18 @@ def maximize_scalar(
     if not successes and max(values) - min(values) > 1e-10:
         raise ArithmeticError("Scalar optimizer did not converge")
     best = max(cache, key=cache.__getitem__)
+    report = SCALAR_SEARCH_CONTRACT.assess(
+        (
+            *report.evidence[:2],
+            checked(
+                "finite_samples",
+                True,
+                f"All {calls} evaluated objective values passed the finite-value runtime check",
+            ),
+        )
+    )
     return ScalarMaximum(
+        applicability=report,
         value=best,
         objective_value=cache[best],
         evaluations=calls,

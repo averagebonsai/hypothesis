@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, JsonValue
 
+from .contracts import ApplicabilityReport
 from .mechanism import Mechanism
 from .observation import observe, permissions_for
 from .policy import Policy
@@ -47,6 +48,10 @@ class ComponentRegistry:
             "protocols": list(self.protocols),
             "solvers": list(self.solvers),
             "game_views": list(self.game_views),
+            "solver_contracts": {
+                key: factory().contract.model_dump(mode="json")
+                for key, factory in self.solvers.items()
+            },
             "solver_requirements": {
                 key: (
                     requirement.__name__
@@ -62,6 +67,19 @@ class ComponentRegistry:
                 key: model.model_json_schema() for key, model in self.action_schemas.items()
             },
         }
+
+    def benchmark_applicability(self, config: SimulationConfig) -> ApplicabilityReport | None:
+        """Assess the configured benchmark without executing actors or a solver search."""
+        self.validate_config(config)
+        if config.benchmark is None:
+            return None
+        spec = config.benchmark
+        mechanism = self.mechanisms[config.mechanism_id]()
+        protocol = self.protocols[config.protocol_id](deepcopy(config.protocol_parameters))
+        view = self.game_views[spec.game_view_id](
+            config.model_copy(deep=True), initial_state(config, protocol), mechanism
+        )
+        return self.solvers[spec.solver_id]().assess(view, dict(spec.parameters))
 
     def create_policy(self, actor: Actor) -> Policy:
         """Fresh policy with only that actor's declared schemas, without decisions."""

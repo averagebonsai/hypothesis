@@ -1,0 +1,15 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "README.md": "370c876c14669a97aa8d190b00a6641691993fc51061eebf9c1787891b4138ac",
+    "bundle.json": "1150685535539cd208a28c64c093492ba1e9dc027f12c21deda78a0e7d2cf0a2",
+    "experiment_extension/__init__.py": "de5358c3bb1cf0fb8cb85380f838e86b615ebaace951861aaf64df78b7b52e4e",
+    "experiment_extension/alloc_schema.py": "c3f66c623edf0782bc620266b6a539b8496765df38a1451362321be6c7eaf446",
+    "experiment_extension/game_view.py": "3a08c49313ca492b2aa2147b87d5d20979ac606ffea416dc977b949de4e6add7",
+    "experiment_extension/mechanism.py": "e38229f18f876fcca0cd1930d3ff425e298c0b1ed994a4d9ea6ad650f59671b2",
+    "experiment_extension/solver.py": "30ab4aae2a56245b278cae4fde6bf66df6f7535e418c0c706fa4fd4286d511a4",
+    "job.example.json": "afec2261d5684a25df5fa0fa276b7b8974b5d7a305d65d1f07bc890d1e70ffd0",
+    "tests/test_allocation.py": "b6630c2032856996f78600fdf35e1d343d834e79a987f9734d63be481edeb496"
+  },
+  "digest": "65eddbeb9a09feb6e16bff93ada30c476bcf1f27361463b9d93a6a9f16e174df"
+}

@@ -1,0 +1,15 @@
+{
+  "type": "explicitly_authorized_documentation_amendment",
+  "created_utc": "2026-11-02T00:00:44.962104+00:00",
+  "authorization": "User requested a report in the v1 README about tools used and code created from scratch",
+  "original_digest": "eb7af6a48d1cb0f2a962f8d7b212d3b99ff19a59ed6862c8d00e2d05d6ba6ce5",
+  "amended_digest": "df52bb6c74b4bdb61ab1ba59abf913c960d675194a3d610bb00a2277caa532eb",
+  "changed_payload_files": [
+    "README.md"
+  ],
+  "seal_file_updated": "v1/bundle.lock.json",
+  "implementation_spec_tests_and_fixture_unchanged": true,
+  "original_readme_and_seal": "provenance/v1-tested-eb7af6a48d1c",
+  "validation": "All original non-README payload hashes match. Docker tests were not rerun for the documentation-only amendment; original receipts apply to the original digest.",
+  "also_documents": "Coding-agent instruction file location and the absence of automatic prompt injection or a separate coding-agent launcher"
+}

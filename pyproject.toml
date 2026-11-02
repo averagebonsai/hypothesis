@@ -15,7 +15,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/simulation_core", "src/components", "src/examples"]
+packages = ["src/simulation_core", "src/components", "src/examples", "src/agent_tools", "src/extension_worker"]
 
 [dependency-groups]
 dev = [
@@ -34,6 +34,10 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+
+[tool.ruff.lint.isort]
+known-first-party = ["simulation_core", "components", "examples", "agent_tools", "extension_worker"]
+known-third-party = ["experiment_extension"]
 
 [tool.mypy]
 files = ["src"]

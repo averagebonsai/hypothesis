@@ -1,0 +1,12 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "README.md": "3ae7b5e8389fe746a7adc4cfba5d7db9493f4a7b65d75bc67c4028ababed6327",
+    "bundle.json": "a0a002d4c1ae26054907a31b7b927a8f062d6a47507df4d244016ea00f3aa922",
+    "experiment_extension/__init__.py": "c05a18bc4def09d768ed19de9192e0ad166ea51e6f8cbfe9e544cecb023506f7",
+    "experiment_extension/allocation.py": "c1b670f733a7c610d26dcb7ddda70f0ba5ee56842037d0f12ece73db1ec0bb7e",
+    "job.example.json": "52673f936d2fa362d21f0a5b644c87937211d16fd94522ef749615b958b49d24",
+    "tests/test_allocation.py": "d3013036c5163d4ff2331e0c32816b7caa0868d9e5617fe3ed64e205e1659cf3"
+  },
+  "digest": "df52bb6c74b4bdb61ab1ba59abf913c960d675194a3d610bb00a2277caa532eb"
+}

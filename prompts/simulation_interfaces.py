@@ -1,5 +1,16 @@
 """Reference interface contract for a composable simulation engine.
 
+Experimental workflow contracts now live in agent_tools/specs.py, with a
+container-only loader in extension_worker. Host tooling never imports experimental
+Python. Bundles persist outside src; runtime and global registry contracts remain
+unchanged. See readable plan section 24 and docs/experimental_workflow.md.
+
+Method-assumption contracts are maintained in simulation_core/contracts.py and
+readable plan section 23. Solver.solve now enforces declared requirements and
+attaches ApplicabilityReport; concrete equilibrium algorithms implement _solve.
+Contracts and evidence record conditions and limitations without pretending to
+prove global convexity from numerical tests.
+
 Cleanup contracts are maintained in src/simulation_core and readable plan section
 22: core DecisionPhase, optional declared schedules, per-actor mechanism payload
 contracts, Solver.validate_game, shared MechanismGameView, ScalarInterval, and
