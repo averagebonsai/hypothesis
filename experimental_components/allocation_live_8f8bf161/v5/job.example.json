@@ -1,0 +1,247 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "Implement the supplied allocation problem using reusable toolkit interfaces and a separate mathematical benchmark.",
+    "problem": {
+      "schema_version": "problem.statement.v1",
+      "description": "Allocate a fixed budget among projects to stay close to a desired allocation.",
+      "actors": [
+        {
+          "id": "allocator",
+          "description": "One allocator"
+        }
+      ],
+      "parameters": {
+        "budget": 10.0,
+        "target": [
+          8.0,
+          6.0
+        ]
+      },
+      "variables": [
+        {
+          "name": "allocation",
+          "actor_id": "allocator",
+          "shape": "vector",
+          "dimension": "target",
+          "domain": "continuous",
+          "lower": 0.0,
+          "upper": null
+        }
+      ],
+      "objectives": [
+        {
+          "name": "score",
+          "actor_id": "allocator",
+          "sense": "maximize",
+          "expression": {
+            "kind": "operation",
+            "operator": "negate",
+            "arguments": [
+              {
+                "kind": "operation",
+                "operator": "sum",
+                "arguments": [
+                  {
+                    "kind": "operation",
+                    "operator": "square",
+                    "arguments": [
+                      {
+                        "kind": "operation",
+                        "operator": "subtract",
+                        "arguments": [
+                          {
+                            "kind": "reference",
+                            "name": "allocation"
+                          },
+                          {
+                            "kind": "reference",
+                            "name": "target"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "constraints": [
+        {
+          "name": "fixed_budget",
+          "left": {
+            "kind": "operation",
+            "operator": "sum",
+            "arguments": [
+              {
+                "kind": "reference",
+                "name": "allocation"
+              }
+            ]
+          },
+          "relation": "eq",
+          "right": {
+            "kind": "reference",
+            "name": "budget"
+          }
+        }
+      ],
+      "timing": "One simultaneous round; one action by allocator",
+      "evaluation": "deterministic",
+      "requirements": [
+        "The implementation must support other finite targets, positive budgets, and vector dimensions >=2.",
+        "Use the scripted primary action [5,5] for this fixture. Compute a separate optimizer benchmark without replacing that action.",
+        "Use payload field allocation and world parameter names budget and target."
+      ],
+      "feasibility_tolerance": 1e-8
+    },
+    "supplied_inputs": [
+      {
+        "name": "budget",
+        "value": 10.0,
+        "target_path": "/world/parameters/budget",
+        "source_reference": null
+      },
+      {
+        "name": "target",
+        "value": [
+          8.0,
+          6.0
+        ],
+        "target_path": "/world/parameters/target",
+        "source_reference": null
+      },
+      {
+        "name": "scripted fixture",
+        "value": [
+          5.0,
+          5.0
+        ],
+        "target_path": "/world/actors/0/policy_parameters/payload/allocation",
+        "source_reference": null
+      },
+      {
+        "name": "fixture policy",
+        "value": "scripted.v1",
+        "target_path": "/world/actors/0/policy_id",
+        "source_reference": null
+      }
+    ],
+    "requirements": []
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "allocator",
+          "kind": "allocator",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "allocate": "experimental.allocation_live_8f8bf161.action"
+            }
+          },
+          "policy_id": "scripted.v1",
+          "policy_parameters": {
+            "kind": "allocate",
+            "payload": {
+              "allocation": [
+                5.0,
+                5.0
+              ]
+            }
+          }
+        }
+      ],
+      "parameters": {
+        "allocation_kind": "allocate",
+        "budget": 10.0,
+        "target": [
+          8.0,
+          6.0
+        ]
+      },
+      "initial_public_state": {
+        "budget": 10.0,
+        "target": [
+          8.0,
+          6.0
+        ]
+      },
+      "initial_private_state": {
+        "allocator": {
+          "facts": {},
+          "memory": {}
+        }
+      }
+    },
+    "mechanism_id": "experimental.allocation_live_8f8bf161.mechanism",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "active_phase": "act",
+      "rounds": 1,
+      "terminal_phase": "finished"
+    },
+    "permissions": {
+      "allocator": {
+        "public_fields": [
+          "budget",
+          "target"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      }
+    },
+    "phase_permissions": {},
+    "benchmark": {
+      "solver_id": "experimental.allocation_live_8f8bf161.solver",
+      "game_view_id": "experimental.allocation_live_8f8bf161.game_view",
+      "parameters": {},
+      "information_assumption": "complete_information",
+      "comparison_tick": 1
+    },
+    "max_steps": 10,
+    "assumptions": [
+      {
+        "path": "/world/actors/0/policy_parameters/payload/allocation",
+        "value": [
+          5.0,
+          5.0
+        ],
+        "source": "user",
+        "rationale": "User scripted fixture.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_id",
+        "value": "scripted.v1",
+        "source": "user",
+        "rationale": "User fixture policy.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/budget",
+        "value": 10.0,
+        "source": "user",
+        "rationale": "User-supplied budget.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/target",
+        "value": [
+          8.0,
+          6.0
+        ],
+        "source": "user",
+        "rationale": "User-supplied target.",
+        "reference": null
+      }
+    ]
+  }
+}

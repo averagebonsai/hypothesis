@@ -1,11 +1,21 @@
 # Instructions for an external simulation-creating coding agent
 
+This is the general SOP for an external agent with operator-provided development
+tools. The API-backed `agent_tools.authoring.CodingAgent` loads
+`prompts/blind_coding_agent.md` instead: it defines the same general responsibilities
+for structured API responses without filesystem or execution tools. Neither
+prompt supplies experiment-specific facts; these belong in ExperimentRequest and
+the resolved SimulationConfig. A prompt file is not automatically loaded merely
+because it exists in this directory.
+
 Use the approved toolkit to implement the user's experiment. You are responsible
-for planning and authoring components; the toolkit does not generate or repair
-code for you. Follow `prompts/newsimulation.md` and
+for planning and authoring components; an optional host controller can orchestrate
+your API responses, validation and repair feedback. Follow `prompts/newsimulation.md` and
 `docs/experimental_workflow.md`.
 
-1. Read the request and inventory. Separate configuration, composition, missing
+1. Choose a direct tool for a standalone computation, or the existing simulation
+   interfaces when actor policies, observations and interaction matter. Honor
+   request.execution_kind. Then read the request and inventory. Separate configuration, composition, missing
    implementation, critical missing information, and framework-interface gaps.
    Evaluate shapes per actor, feasible sets, timing, information, stochasticity,
    and the evidence needed for claimed guarantees. Do not assume that every
@@ -19,7 +29,11 @@ code for you. Follow `prompts/newsimulation.md` and
    Request review if a new interface or dependency is necessary.
 4. Define grounded acceptance tests before implementation. Prefer analytical
    cases, independent calculations, invariants, counterexamples, and justified
-   boundary cases. Do not weaken required checks to obtain a passing result.
+   boundary cases. Tests must exercise the exported components and runtime, not
+   merely a duplicate implementation inside the test file. Check test lint before
+   freezing. Validate manifest dependencies, configuration bindings, test syntax,
+   actual component use and lint before accepting the plan/tests. Do not weaken
+   required checks to obtain a passing result.
 5. Implement approved parent interfaces with explicit annotations and schemas.
    Solvers implement `_solve`; use MethodContract and explicit evidence. Positive
    samples do not prove global convexity. Pure helpers may use callable contracts.
@@ -29,13 +43,38 @@ code for you. Follow `prompts/newsimulation.md` and
    to fall back to host execution. Do not pass API keys or `.env` to the worker.
 7. Use the worker's complete validation receipt to classify failures. Repair
    unambiguous implementation defects in a new version. Keep stable failure IDs
-   and at most two repair attempts per identified failure. Preserve earlier
+   without a fixed repair/turn cap during the current diagnostic phase, unless
+   the operator explicitly supplies one. Preserve earlier
    versions/receipts. Scientific assumptions, required tests, constraints,
    objectives, or acceptance thresholds need explicit review to change.
 8. Demonstrate an end-to-end experiment after validation. Report the primary
    actor decisions separately from any mathematical benchmark, list assumptions
    and limitations, and provide the exact bundle version and validation/run
    receipt. Do not claim a live LLM result from a scripted fixture.
+9. Provide a notebook generator in the experimental package and declare it in
+   BundleManifest.notebook. Its (JobResult, output_directory: Path) -> Path callable
+   writes results.ipynb. Reuse simulation_core.reporting.write_results_notebook
+   where useful. The worker executes the notebook and exports it beside result.json;
+   cells show actual saved results through external reporting code, without
+   repeating actor/model calls. Provide structured-problem verification bindings
+   and applicable independent mathematical checks.
 
 Passing tests authorizes only an isolated experimental run. Promotion to the
 shared library is a separate future review process.
+
+Derive actor IDs, parameter names, action shapes, policies, protocols and run
+length from the request and registered schemas. Mathematical benchmarks are
+optional and must fit the requested solution concept. Keep requested primary
+behavior separate from benchmark results, and report capabilities unavailable in
+the worker instead of silently substituting different behavior. Record necessary
+assumptions in configuration. Component dependencies belong in
+CustomComponentSpec.dependencies; BundleManifest.existing_dependencies contains
+approved installed Python distribution names, not registry IDs.
+
+Use native agent_tools.contracts models: CodingPlan.bundle and simulation are
+objects, not serialized JSON fields. ToolInvocation needs no simulation scaffold.
+API responses return a plan/implementation or a structured ReviewRequest; review
+and unsupported outcomes terminate the loop. Core fixture builders and typed
+reference cases are checked before freezing. Select rejection/variation/custom
+checks by applicability; do not invent domain restrictions. Coding uses
+MODEL_CODING with max reasoning; actor policies use MODEL. See docs/task_routing.md.

@@ -12,6 +12,8 @@ from uuid import uuid4
 from simulation_core.execution import JobManifest
 
 from .bundles import copy_trusted_context, snapshot_bundle, verify_bundle
+from .jobs import ToolJobManifest
+from .notebooks import export_diagnostic, export_notebook, validate_notebook_json
 from .process import bounded_command
 from .specs import RunReceipt, WorkerLimits, WorkerResponse
 
@@ -178,12 +180,14 @@ class DockerWorker:
     def execute(
         self,
         bundle: Path,
-        job: JobManifest,
+        job: JobManifest | ToolJobManifest,
         *,
         operation: Literal["validate", "run"] = "run",
         probes: tuple[JobManifest, ...] = (),
     ) -> RunReceipt:
-        _, original_seal, _ = verify_bundle(bundle)
+        manifest, original_seal, _ = verify_bundle(bundle)
+        if isinstance(job, ToolJobManifest) and probes:
+            raise ValueError("Simulation probes do not apply to direct tools")
         # An image tag is derived from current trusted inputs and resolved to an immutable image ID.
         with TemporaryDirectory(prefix="hypothesis-run-") as temporary:
             root = Path(temporary)
@@ -228,6 +232,19 @@ class DockerWorker:
                     raise ValueError("Worker response refers to a different bundle")
                 if response.result is not None and response.result.manifest != job:
                     raise ValueError("Worker returned a different experiment manifest")
+                if response.tool_result is not None and response.tool_result.manifest != job:
+                    raise ValueError("Worker returned a different tool manifest")
+                if response.diagnostic is not None and response.diagnostic.result.manifest != job:
+                    raise ValueError("Worker diagnostic refers to a different manifest")
+                if (
+                    operation == "run"
+                    and response.result is not None
+                    and manifest.notebook is not None
+                    and response.notebook_json is None
+                ):
+                    raise ValueError("Worker omitted the required results notebook")
+                if response.notebook_json is not None:
+                    validate_notebook_json(response.notebook_json)
                 if len(response.probe_results) != (
                     len(probes) if operation == "run" and response.result is not None else 0
                 ):
@@ -247,10 +264,15 @@ class DockerWorker:
                 )
                 reports = bundle.parent.parent / "_runs" / bundle.parent.name / bundle.name
                 reports.mkdir(parents=True, exist_ok=True)
-                path = reports / f"{uuid4().hex}.json"
+                run_id = uuid4().hex
+                path = reports / f"{run_id}.json"
                 descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(descriptor, "w") as stream:
                     stream.write(receipt.model_dump_json(indent=2) + "\n")
+                if response.notebook_json is not None:
+                    export_notebook(response, reports / run_id)
+                if response.diagnostic is not None:
+                    export_diagnostic(response.diagnostic, reports / (run_id + "-unapproved"))
                 return receipt
             finally:
                 subprocess.run(

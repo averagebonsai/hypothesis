@@ -1,0 +1,17 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "0cbc894db33a5f392632cdd982845496d7246b7e3a43e3e782e132cfab2e171b",
+    "experiment_extension/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "experiment_extension/game_view.py": "e85979c3914a768c7c92b8343de913f1289cdffb11ddb0642a40db01bc8a1180",
+    "experiment_extension/mechanism.py": "927b1c20ef33b511cad6b3f5ac02eea9da60ce51d8c5d63bc316e432d04e78bb",
+    "experiment_extension/notebook.py": "c460945419df2a74b7eb066b8b1ba1fffcb085066c90054cb09eeea79e0d5ca3",
+    "experiment_extension/schemas.py": "c3f66c623edf0782bc620266b6a539b8496765df38a1451362321be6c7eaf446",
+    "experiment_extension/solver.py": "f8d71d5752e69e68b1590f5f86f229429cbc723648c9a64d04c946d5102698b0",
+    "job.example.json": "f3febec626672b85ce549208a3e130e5496d3d889608bc1f0a9b5fedddcbedd6",
+    "tests/test_benchmark.py": "3f6b1fc0608bd8a581fd9b453bc226462f24224a0a70bb2f9045ce7be2c4f0c9",
+    "tests/test_mechanism.py": "84b6875648ef37dae39d932ab05d6d4028f6c0e232bdfb5fab15ce85e2d38e6e",
+    "tests/test_notebook.py": "3c47e4abd2d65cac56c946a7ab636922fe92ea1c29b51744e92eee45d31ffb63"
+  },
+  "digest": "15a30c8a9ca4cbb51b0c3c3a381641cf0f0bf00bec60911b8697ba8f2048dd90"
+}

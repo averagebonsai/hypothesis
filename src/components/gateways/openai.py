@@ -48,6 +48,34 @@ def strict_schema(schema: dict[str, JsonValue]) -> dict[str, JsonValue]:
     return result
 
 
+def native_schema(schema: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Preserve typed objects/maps without provider-incompatible recursive JsonValue.
+
+    JsonValue means any JSON value. Its recursive Pydantic definition can therefore
+    be represented by an unconstrained schema; domain validation still happens in
+    Pydantic. Fixed authoring fields retain their full schemas. Actor strict mode
+    is unchanged.
+    """
+    result = deepcopy(schema)
+
+    def visit(node: JsonValue) -> None:
+        if isinstance(node, dict):
+            if node.get("$ref") == "#/$defs/JsonValue":
+                node.clear()
+                return
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+
+    definitions = result.get("$defs")
+    if isinstance(definitions, dict):
+        definitions.pop("JsonValue", None)
+    visit(result)
+    return result
+
+
 class OpenAIResponsesGateway(ModelGateway):
     endpoint = "https://api.openai.com/v1/responses"
 
@@ -88,9 +116,11 @@ class OpenAIResponsesGateway(ModelGateway):
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "actor_decision",
-                    "schema": strict_schema(request.response_schema),
-                    "strict": True,
+                    "name": "structured_response",
+                    "schema": strict_schema(request.response_schema)
+                    if request.response_strict
+                    else native_schema(request.response_schema),
+                    "strict": request.response_strict,
                 }
             },
         }

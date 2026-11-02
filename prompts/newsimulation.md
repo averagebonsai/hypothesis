@@ -8,6 +8,15 @@ New functionality should be introduced through approved extension interfaces whe
 
 This SOP is for an external coding agent, not an autonomous code-generation controller. Use the data-only tools in `agent_tools`; source imports, tests, and experimental execution happen only inside the Docker worker. See `docs/experimental_workflow.md` for commands and the retained bundle format.
 
+## Step 0 — Choose the execution route
+
+Honor ExperimentRequest.execution_kind when specified. Standalone calculations
+and mathematical helpers use ordinary callables and tests through the tool route;
+there are no dummy actors, protocols, mechanisms or Nash results. Use the existing
+simulation interfaces when policies, authorized observations, state transitions
+and actor interactions are part of the requested behavior. Mathematical references
+remain separate from actor decisions. See docs/task_routing.md.
+
 ## Step 1 — Identify the missing capability
 
 Before writing code:
@@ -63,6 +72,13 @@ For instance, declare convexity as a required precondition when the method needs
 
 Reuse framework-maintained contract tests and independently verified benchmarks wherever available.
 
+Before freezing a plan, validate its schema, approved Python distribution names
+(separate from component IDs), configuration bindings, test syntax, component use
+and lint. Reject copied-formula tests that never exercise the exported components.
+Static checks are heuristics, not proof of test adequacy. Structured numeric
+problems need explicit variable/objective verification bindings and applicable
+independent references.
+
 Do not weaken, delete, or rewrite required tests to make an implementation pass. Framework-maintained checks are outside the bundle and cannot be replaced. A demonstrably incorrect specification or test needs an explicit reviewed revision, with the reason retained. Numerical agreement with a test derived from the same mistaken formula is not independent validation.
 
 ## Step 4 — Implement the extension
@@ -106,7 +122,7 @@ If validation fails:
 1. Classify the failure as an implementation defect, numerical limitation, specification problem, or architectural incompatibility.
 2. Automatically repair implementation defects when the intended behavior is unambiguous.
 3. Rerun all relevant tests after each repair.
-4. Limit automatic repair attempts to 2 attempts (totally 3 attempts at constructing a solution) per stable failure identified. Record repair_counts and keep every attempted version and validation receipt. Do not reset failure IDs to evade the limit.
+4. During the current diagnostic phase, do not impose a fixed coding-turn or repair-count limit unless the operator supplies one. Record repair_counts under stable failure IDs and keep every attempted version and receipt. Per-call payload/token/time limits and worker isolation remain enforced. An interruption, transport failure, or required scientific/interface revision still stops execution.
 5. Never silently change the experiment's scientific assumptions, objective functions, constraints, or acceptance thresholds.
 
 Escalate unresolved failures for human review.
@@ -116,6 +132,14 @@ Escalate unresolved failures for human review.
 After passing validation, use the extension only in an isolated experimental run through a fresh job-local registry overlay. Keep it under `experimental_components/<experiment_id>/<version>/`, outside `src`, with bundle.json, source, acceptance tests, README, and bundle.lock.json. Use `experiment_extension` as the import namespace; the host treats its files only as data. Existing approved IDs cannot be overwritten. Changes after sealing require a new version and validation; keep older versions for inspection.
 
 Use the validated byte snapshot for execution, retaining the matching receipt and result. Do not add experimental imports to components.library or the global registry. The offline trial uses scripted actors; live model access requires a separate credential-isolated design.
+
+Each new coding-agent submission also declares a notebook generator. Implement
+it in experiment_extension with signature (JobResult, output_directory: Path) ->
+Path, writing results.ipynb. The worker supplies result.json, executes the notebook
+offline, validates its outputs and exports both as private run artifacts. Notebook
+cells use reporting code outside the notebook and saved results, rather than
+repeating simulations or model calls. Show primary actions, recorded outcomes,
+separate mathematical comparisons where applicable, assumptions and provenance.
 
 (Not implemented now) In future iterations, we will develop a process that allows for newly developed extensions to enter the global, reusable component registry. It would require a review of:
 - Interface compliance.
@@ -134,3 +158,22 @@ Use the validated byte snapshot for execution, retaining the matching receipt an
 - Never execute untrusted generated code directly in the host controller. They should remain in an isolated worker during testing and experimental execution.
 
 The objective is to expand the toolkit through small, tested, reusable capabilities — not to create a separate bespoke simulation engine for every new experiment.
+
+## Native authoring and verification contracts
+
+Use CodingPlan.bundle and simulation as native typed objects, never JSON document
+strings. Tool plans carry ToolInvocation instead of SimulationConfig. API responses
+carry a plan/implementation or a terminal ReviewRequest; needs_review/unsupported
+returns control immediately. Coding uses MODEL_CODING with max reasoning; actors
+use MODEL. Per-call limits and isolation remain, with no default total coding cap.
+
+Normalize formatting/imports before freezing/sealing and record raw/normalized
+hashes. Use trusted fixture builders and typed reference cases checked against the
+original problem before freezing scientific expectations. Rejection checks are
+opt-in and derive cases from declared rules; penalties, projection and stochastic
+behavior require appropriate custom VerificationCheck classes. Parameter variation
+checks only declared supported ranges. Retain unverified/unsupported findings.
+Completed partial results/notebooks may be exported as unapproved diagnostics,
+never mistaken for an accepted result. Derive schemas from Pydantic exports or
+input_model/output_model references; ordinary utilities need no mathematical
+contract unless making mathematical guarantees.

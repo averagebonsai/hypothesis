@@ -6,7 +6,10 @@ from pydantic import Field, JsonValue, model_validator
 
 from simulation_core.contracts import MethodContract
 from simulation_core.execution import JobResult
+from simulation_core.problems import Numeric
 from simulation_core.types import FrozenModel
+
+from .jobs import ToolResult
 
 ComponentKind = Literal[
     "policy",
@@ -28,6 +31,73 @@ PARENTS = {
     "parameter_schema": "pydantic.BaseModel",
     "utility": "typing.Callable",
 }
+
+# Packages already present in the locked worker image, including reporting tools.
+PythonDistribution = Literal[
+    "numpy", "scipy", "pydantic", "python-dotenv", "matplotlib", "nbformat", "nbclient", "ipykernel"
+]
+
+
+class NotebookSpec(FrozenModel):
+    generator: str = Field(
+        pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$",
+        description="Callable (JobResult, output_directory: Path) -> Path writing results.ipynb",
+    )
+
+
+class VariableBinding(FrozenModel):
+    variable: str
+    actor_id: str
+    payload_field: str
+
+
+class ObjectiveBinding(FrozenModel):
+    objective: str
+    source: Literal["payoff", "metric"]
+    key: str
+    scale: Literal[-1, 1] = 1
+
+
+class ReferenceCase(FrozenModel):
+    id: str = Field(min_length=1)
+    assignments: dict[str, Numeric]
+    feasible: bool
+    objectives: dict[str, float] = Field(default_factory=dict)
+    # Names from the original ProblemStatement, never arbitrary exception text.
+    violations: tuple[str, ...] = ()
+
+
+class ParameterCase(FrozenModel):
+    id: str = Field(min_length=1)
+    parameters: dict[str, Numeric]
+    assignments: dict[str, Numeric]
+
+
+class CustomCheckSpec(FrozenModel):
+    id: str = Field(min_length=1)
+    symbol: str = Field(
+        pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$"
+    )
+    required: bool = False
+    purpose: str = Field(min_length=1)
+
+
+class VerificationFinding(FrozenModel):
+    id: str
+    status: Literal["verified", "failed", "unverified", "unsupported"]
+    evidence: str
+    required: bool = True
+
+
+class VerificationSpec(FrozenModel):
+    variables: tuple[VariableBinding, ...] = ()
+    objectives: tuple[ObjectiveBinding, ...] = ()
+    independent_reference: Literal["none", "single_objective_slsqp"] = "none"
+    tolerance: float = Field(default=1e-6, gt=0, le=1e-4)
+    reference_cases: tuple[ReferenceCase, ...] = ()
+    action_behavior: Literal["reject_infeasible", "custom", "unverified"] = "unverified"
+    parameter_cases: tuple[ParameterCase, ...] = ()
+    custom_checks: tuple[CustomCheckSpec, ...] = ()
 
 
 class CapabilityRequirement(FrozenModel):
@@ -92,21 +162,34 @@ class CustomComponentSpec(FrozenModel):
     kind: ComponentKind
     purpose: str = Field(min_length=1)
     gap_id: str
-    parent_interface: str
+    parent_interface: str = ""
     symbol: str = Field(
         pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$"
     )
-    input_schema: dict[str, JsonValue] = Field(min_length=1)
-    output_schema: dict[str, JsonValue] = Field(min_length=1)
-    dependencies: tuple[str, ...] = ()
+    input_model: str | None = Field(
+        default=None,
+        pattern=r"^(?:simulation_core|experiment_extension)(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$",
+    )
+    output_model: str | None = Field(
+        default=None,
+        pattern=r"^(?:simulation_core|experiment_extension)(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$",
+    )
+    input_schema: dict[str, JsonValue] | None = None
+    output_schema: dict[str, JsonValue] | None = None
+    dependencies: tuple[str, ...] = Field(
+        default=(), description="Component IDs; Python packages belong in existing_dependencies"
+    )
     method_contract: MethodContract | None = None
+    mathematical: bool = False
     acceptance_tests: tuple[AcceptanceTest, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def approved_parent(self) -> Self:
+        if not self.parent_interface:
+            object.__setattr__(self, "parent_interface", PARENTS[self.kind])
         if self.parent_interface != PARENTS[self.kind]:
             raise ValueError("Use the approved parent for the component kind")
-        if self.kind in {"solver", "utility"} and self.method_contract is None:
+        if (self.kind == "solver" or self.mathematical) and self.method_contract is None:
             raise ValueError("Mathematical tools must declare a method contract")
         return self
 
@@ -116,9 +199,13 @@ class BundleManifest(FrozenModel):
     experiment_id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     version: str = Field(pattern=r"^v[1-9][0-9]*$")
     gap_analysis: GapAnalysisReport
-    components: tuple[CustomComponentSpec, ...] = Field(min_length=1)
-    existing_dependencies: tuple[str, ...] = ()
+    components: tuple[CustomComponentSpec, ...] = ()
+    existing_dependencies: tuple[PythonDistribution, ...] = Field(
+        default=(), description="Approved installed Python distribution names, never component IDs"
+    )
     repair_counts: dict[str, int] = Field(default_factory=dict)
+    notebook: NotebookSpec | None = None
+    verification: VerificationSpec | None = None
 
     @model_validator(mode="after")
     def references(self) -> Self:
@@ -137,8 +224,8 @@ class BundleManifest(FrozenModel):
                 for dep in component.dependencies
             ):
                 raise ValueError("Unknown experimental dependency")
-        if any(count < 0 or count > 2 for count in self.repair_counts.values()):
-            raise ValueError("At most two repairs per identified failure; escalate after that")
+        if any(count < 0 for count in self.repair_counts.values()):
+            raise ValueError("Repair counts must be nonnegative")
         return self
 
 
@@ -168,20 +255,38 @@ VALIDATION_CHECKS = frozenset(
 )
 
 
+class DiagnosticArtifact(FrozenModel):
+    status: Literal["unapproved"] = "unapproved"
+    result: JobResult
+    notebook: dict[str, JsonValue] | None = None
+    findings: tuple[VerificationFinding, ...] = ()
+
+
 class WorkerResponse(FrozenModel):
     bundle_digest: str
     checks: tuple[CheckResult, ...]
     result: JobResult | None = None
+    tool_result: ToolResult | None = None
     probe_results: tuple[JobResult, ...] = ()
     error: str | None = None
+    notebook_json: str | None = None
+    verification_findings: tuple[VerificationFinding, ...] = ()
+    diagnostic: "DiagnosticArtifact | None" = None
+    resolved_schemas: dict[str, dict[str, JsonValue]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def valid_checks(self) -> Self:
         names = [check.name for check in self.checks]
         if len(set(names)) != len(names) or set(names) - VALIDATION_CHECKS:
             raise ValueError("Worker checks must be distinct known validation stages")
-        if (self.result is not None or self.probe_results) and not self.passed:
+        if (
+            self.result is not None or self.tool_result is not None or self.probe_results
+        ) and not self.passed:
             raise ValueError("An experiment result requires all validation stages to pass")
+        if self.notebook_json is not None and self.result is None:
+            raise ValueError("A results notebook requires the matching experiment result")
+        if self.result is not None and self.tool_result is not None:
+            raise ValueError("Return one execution kind")
         return self
 
     @property
@@ -190,6 +295,10 @@ class WorkerResponse(FrozenModel):
             {check.name for check in self.checks} == VALIDATION_CHECKS
             and all(check.passed for check in self.checks)
             and self.error is None
+            and all(
+                not finding.required or finding.status == "verified"
+                for finding in self.verification_findings
+            )
         )
 
 

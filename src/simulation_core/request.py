@@ -27,6 +27,7 @@ class SuppliedInput(FrozenModel):
 class ExperimentRequest(FrozenModel):
     schema_version: Literal["experiment.request.v1"] = "experiment.request.v1"
     hypothesis: str = Field(min_length=1)
+    execution_kind: Literal["auto", "tool", "agent_simulation"] = "auto"
     problem: ProblemStatement | None = None
     supplied_inputs: tuple[SuppliedInput, ...] = ()
     requirements: tuple[str, ...] = ()

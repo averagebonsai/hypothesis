@@ -42,6 +42,11 @@ It could only return structured text. The API context excluded:
 - Existing tests, notebooks, documentation, Git history, and this conversation.
 - `.env`, API keys, controller code, and the private evaluation/reference solver.
 
+Historical note: the blind prompt linked above was generalized after this trial.
+The trial used an earlier allocation-specific instruction set; its exact text and
+hash remain in the private audited requests. Updating the current prompt does not
+retroactively change the context or results of this retained trial.
+
 The first request was checked for `vector_allocation`, `project_simplex`, the old
 trial path and provenance marker: none occurred. Exact source hashes and payloads
 are retained. Later repair calls contained only the model's own earlier artifacts

@@ -1,12 +1,14 @@
 """Curated discovery metadata, not an automatic scientific problem classifier."""
 
+from typing import get_args
+
 from pydantic import JsonValue
 
 from components.common.economics.models import LinearDemand, LinearInverseDemand
 from components.common.math.scalar import SCALAR_SEARCH_CONTRACT
 from components.library import standard_registry
 
-from .specs import GapAnalysisReport
+from .specs import GapAnalysisReport, PythonDistribution
 
 SHAPES = {
     "pure_nash.v1": ("finite",),
@@ -31,11 +33,28 @@ def inventory() -> dict[str, JsonValue]:
         },
         "components.common.economics.models.LinearDemand": LinearDemand.model_json_schema(),
         "components.common.economics.models.LinearInverseDemand": LinearInverseDemand.model_json_schema(),
+        "simulation_core.reporting.write_results_notebook": {
+            "signature": "(artifact: JobResult, directory: Path) -> Path",
+            "purpose": "Write results.ipynb; the worker supplies result.json and executes the notebook",
+        },
     }
     result["limitations"] = [
         "Metadata is curated; absent metadata is unknown, not proof of compatibility",
         "LLM policies require gateway injection and are disabled in offline extension workers",
     ]
+    result["approved_python_distributions"] = list(get_args(PythonDistribution))
+    result["task_routes"] = {
+        "tool": "Pure callable + tests; no actors, protocol, mechanism, GameView or Nash wrapper",
+        "agent_simulation": "Policies + authorized observations + mechanism + protocol + runtime; mathematical analysis is separate",
+    }
+    result["verification_capabilities"] = {
+        "reject_infeasible": "Opt-in deterministic complete-profile bounds/constraint/shape counterexamples",
+        "parameter_cases": "Declared numeric parameter variations of mechanism/solver, without actor calls",
+        "custom_checks": "VerificationCheck subclasses; report applicability and evidence; stochastic/stateful domains need suitable custom checks",
+    }
+    result["benchmark_requirements"] = (
+        "Current BenchmarkRunner diagnostics require finite actions, a best-response view, or solver-supplied best responses"
+    )
     return result
 
 

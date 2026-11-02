@@ -4,11 +4,14 @@ import argparse
 import json
 from pathlib import Path
 
+from pydantic import TypeAdapter
+
 from simulation_core.execution import JobManifest
 
 from .bundles import seal_bundle, verify_bundle
 from .docker_worker import DockerWorker
 from .inventory import inventory
+from .jobs import ToolJobManifest
 
 
 def main() -> None:
@@ -48,11 +51,13 @@ def main() -> None:
             )
         )
     else:
-        job = JobManifest.model_validate_json(args.job.read_text())
+        job = TypeAdapter(JobManifest | ToolJobManifest).validate_json(args.job.read_text())
         receipt = worker.execute(args.bundle, job, operation=args.command)
         print(receipt.model_dump_json(indent=2))
         if not receipt.response.passed or (
-            args.command == "run" and receipt.response.result is None
+            args.command == "run"
+            and receipt.response.result is None
+            and receipt.response.tool_result is None
         ):
             raise SystemExit(1)
 

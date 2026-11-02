@@ -2,7 +2,7 @@
 
 This toolkit supports an **external coding agent**. The worker validates and runs
 submitted bundles. An optional host-side `agent_tools.authoring.CodingAgent` adapter
-now makes bounded coding-model calls and records exact prompts and responses; it
+now makes auditable coding-model calls and records exact prompts and responses; it
 does not give the model host filesystem or execution tools. A controller must
 orchestrate planning, implementation, validation, and repairs. An external agent
 can also use `prompts/external_coding_agent.md` as its task instructions
@@ -165,17 +165,22 @@ preservation, and actual container restrictions. The full bundle is never import
 on the host. Do not run `pytest experimental_components/...` locally.
 
 When validation fails, keep the receipt, classify the failure, and repair only the
-implementation when intent is clear. Record repair_counts per stable failure ID;
-at most two repairs follow the initial attempt. These counts are declared by the
-external agent, not inferred by an autonomous controller. Do not reset IDs/counts
-to evade the limit. Publish changes under a new version. Scientific assumptions,
+implementation when intent is clear. Record repair_counts per stable failure ID.
+During the diagnostic phase there is no fixed coding-turn or repair-count cap;
+an operator may explicitly configure one. The optional run_authoring controller
+records successive implementation versions and counts. Publish changes under a
+new version. Scientific assumptions,
 objectives, constraints, required tests, or thresholds need explicit review to
 change. New dependencies require approval, a locked update, and a new trusted image.
 
 ## Blind live coding-model trial
 
 The optional adapter loads `prompts/blind_coding_agent.md` into the request's
-instructions field. It sends an explicit allowlist of toolkit source interfaces,
+instructions field. This is the active, experiment-independent API prompt;
+`prompts/external_coding_agent.md` is the general SOP for a separately operated
+agent with development tools. Experiment-specific definitions belong in the
+request and resolved configuration, not either prompt.
+It sends an explicit allowlist of toolkit source interfaces,
 the inventory, and a fresh `ExperimentRequest`. It excludes prior bundles,
 results, tests, notebooks, documentation, credentials, Git history, and the
 interactive conversation. Repairs receive only the model's own artifacts and
@@ -184,8 +189,9 @@ the host transport; the execution worker remains offline.
 
 Each audit records source and prompt hashes, exact requests/responses, usage, and
 provider IDs, with owner-only permissions under ignored `_authoring` directories.
-The adapter limits calls, output tokens, and payload sizes. Resume checks the same
-context and retains the consumed budget. API generation and Docker execution are
+The adapter limits per-call output tokens and payload sizes. Coding calls are
+uncapped by default; max_calls can explicitly impose a limit. Resume checks the same
+context and retains consumed call counts. API generation and Docker execution are
 separate operations; API success is not validation success.
 
 See [structured problems](problem_statements.md) and the
@@ -193,3 +199,12 @@ See [structured problems](problem_statements.md) and the
 The first live submission failed validation. Its passing self-tests did not test
 its actual components, reinforcing the need for framework-owned integration and
 independent verification. No held-out evaluation was run after that failure.
+
+The [next-trial preparation guide](authoring_preparation.md) describes the new
+pre-freeze plan/test checks, independent structured-problem verification, notebook
+generator/execution/export contract, reduced context and uncapped diagnostic
+workflow. The later allocation_live_8f8bf161 report records the live diagnostic
+trial. Current native contracts/model roles/routing have offline checks; the
+new auction request has not been run. Read the preparation guide for the current
+API: CodingPlan uses native objects, run_authoring returns AuthoringOutcome,
+and a review request terminates the controller instead of extending the repair loop.

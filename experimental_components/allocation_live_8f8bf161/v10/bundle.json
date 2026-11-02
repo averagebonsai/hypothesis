@@ -1,0 +1,352 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "allocation_live_8f8bf161",
+  "version": "v10",
+  "gap_analysis": {
+    "objective": "Allocate fixed budget close to target with separate benchmark",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "protocol",
+          "description": "One simultaneous round",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "One simultaneous round",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "primary_policy",
+          "description": "Scripted primary action",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "scripted.v1"
+        ],
+        "reason": "Scripted fixture action",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "action_schema",
+          "description": "Allocation payload",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No reusable vector payload",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "mechanism",
+          "description": "Score negated distance",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No reusable scoring mechanism",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "game_view",
+          "description": "Read-only game view",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Need isolated evaluator",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "solver",
+          "description": "Optimizer benchmark",
+          "action_shape": "vector",
+          "dimensions_per_actor": {
+            "allocator": 2
+          },
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Need analytic benchmark",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "notebook",
+          "description": "Notebook report",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Need notebook generator",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.allocation_live_8f8bf161.action",
+      "kind": "action_schema",
+      "purpose": "Validate allocation vector payload",
+      "gap_id": "action_schema",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:AllocationPayload",
+      "input_schema": {
+        "payload": "allocation list"
+      },
+      "output_schema": {
+        "payload": "validated vector"
+      },
+      "dependencies": [],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_action_schema_valid",
+          "category": "interface",
+          "expected": "Vector payload validates and serializes",
+          "reference": "payload field allocation"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_live_8f8bf161.mechanism",
+      "kind": "mechanism",
+      "purpose": "Score fixed-budget allocation",
+      "gap_id": "mechanism",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.mechanism:AllocationMechanism",
+      "input_schema": {
+        "action": "allocate"
+      },
+      "output_schema": {
+        "outcome": "payoffs and metrics"
+      },
+      "dependencies": [
+        "experimental.allocation_live_8f8bf161.action"
+      ],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_scores",
+          "category": "functional",
+          "expected": "Score equals negated squared distance",
+          "reference": "problem objectives"
+        },
+        {
+          "name": "test_mechanism_rejects",
+          "category": "failure",
+          "expected": "Wrong dimension or NaN rejected",
+          "reference": "invalid payload"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_live_8f8bf161.game_view",
+      "kind": "game_view",
+      "purpose": "Isolated evaluator over mechanism",
+      "gap_id": "game_view",
+      "parent_interface": "simulation_core.solver.GameView",
+      "symbol": "experiment_extension.game_view:AllocationGameView",
+      "input_schema": {
+        "profile": "single action"
+      },
+      "output_schema": {
+        "outcome": "mechanism outcome"
+      },
+      "dependencies": [
+        "experimental.allocation_live_8f8bf161.mechanism"
+      ],
+      "method_contract": null,
+      "acceptance_tests": [
+        {
+          "name": "test_game_view_evaluates",
+          "category": "interface",
+          "expected": "Game view evaluates profiles",
+          "reference": "read-only evaluator"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_live_8f8bf161.solver",
+      "kind": "solver",
+      "purpose": "Compute projection benchmark optimum",
+      "gap_id": "solver",
+      "parent_interface": "simulation_core.solver.Solver",
+      "symbol": "experiment_extension.solver:AllocationSolver",
+      "input_schema": {
+        "parameters": "budget and target"
+      },
+      "output_schema": {
+        "equilibrium": "optimal allocation"
+      },
+      "dependencies": [
+        "experimental.allocation_live_8f8bf161.game_view"
+      ],
+      "method_contract": {
+        "name": "Simplex projection benchmark",
+        "requirements": [
+          {
+            "id": "view",
+            "description": "Game view available",
+            "enforcement": "required"
+          },
+          {
+            "id": "projection_inputs",
+            "description": "Positive budget finite target dim ge 2",
+            "enforcement": "required"
+          }
+        ],
+        "guarantees": [
+          "Euclidean projection of target onto simplex"
+        ],
+        "limitations": [
+          "Analytic result for convex projection only",
+          "Floating point tolerance applies"
+        ]
+      },
+      "acceptance_tests": [
+        {
+          "name": "test_solver_fixture_optimum",
+          "category": "mathematical",
+          "expected": "Solver returns projection 6 4 with score minus 8",
+          "reference": "analytic projection"
+        },
+        {
+          "name": "test_solver_matches_reference",
+          "category": "integration",
+          "expected": "Solver matches SLSQP reference",
+          "reference": "independent reference"
+        }
+      ]
+    },
+    {
+      "id": "experimental.allocation_live_8f8bf161.notebook",
+      "kind": "utility",
+      "purpose": "Generate results notebook",
+      "gap_id": "notebook",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.notebook:generate",
+      "input_schema": {
+        "artifact": "JobResult"
+      },
+      "output_schema": {
+        "path": "notebook path"
+      },
+      "dependencies": [],
+      "method_contract": {
+        "name": "Results notebook",
+        "requirements": [
+          {
+            "id": "artifact",
+            "description": "Completed job available",
+            "enforcement": "required"
+          }
+        ],
+        "guarantees": [
+          "Writes results.ipynb without re-execution"
+        ],
+        "limitations": [
+          "Reads saved result only"
+        ]
+      },
+      "acceptance_tests": [
+        {
+          "name": "test_notebook_writes",
+          "category": "integration",
+          "expected": "Generator writes results.ipynb",
+          "reference": "reporting helper"
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [
+    "numpy",
+    "scipy",
+    "pydantic",
+    "matplotlib"
+  ],
+  "repair_counts": {
+    "implementation_validation": 9
+  },
+  "notebook": {
+    "generator": "experiment_extension.notebook:generate"
+  },
+  "verification": {
+    "variables": [
+      {
+        "variable": "allocation",
+        "actor_id": "allocator",
+        "payload_field": "allocation"
+      }
+    ],
+    "objectives": [
+      {
+        "objective": "score",
+        "source": "payoff",
+        "key": "allocator",
+        "scale": 1
+      }
+    ],
+    "independent_reference": "single_objective_slsqp",
+    "tolerance": 1e-6
+  }
+}

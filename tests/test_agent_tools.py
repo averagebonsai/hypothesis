@@ -151,14 +151,20 @@ def test_bad_reuse_detects_scalar_vector_mismatch(bundle):
     assert "shared_tools" in inventory()
 
 
-def test_specs_require_approved_parent_contracts_and_bounded_repairs(bundle):
+def test_specs_require_approved_parents_and_allow_uncapped_repair_counts(bundle):
     data = json.loads((bundle / "bundle.json").read_text())
     data["components"][0]["parent_interface"] = "arbitrary.Import"
     with pytest.raises(ValidationError):
         BundleManifest.from_json_values(data)
     data = json.loads((bundle / "bundle.json").read_text())
     data["repair_counts"] = {"failure-1": 3}
-    with pytest.raises(ValidationError, match="two repairs"):
+    assert BundleManifest.from_json_values(data).repair_counts["failure-1"] == 3
+    data["repair_counts"] = {"failure-1": -1}
+    with pytest.raises(ValidationError, match="nonnegative"):
+        BundleManifest.from_json_values(data)
+    data["repair_counts"] = {}
+    data["existing_dependencies"] = ["simultaneous.v1"]
+    with pytest.raises(ValidationError):
         BundleManifest.from_json_values(data)
 
 

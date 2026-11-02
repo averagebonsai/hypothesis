@@ -863,7 +863,9 @@ all notebooks offline. Preserve saved live outputs and make no live calls.
 
 The user selected an external coding agent following an SOP, an actual Docker
 worker, and retained versioned bundles under experimental_components outside src.
-No autonomous model-calling generator or repair controller is introduced.
+The initial worker milestone did not include a model-calling controller. A later
+live trial added an optional host API adapter; the diagnostic preparation below
+adds an explicitly invoked authoring/repair workflow.
 
 Provide typed capability/gap reports, extension specifications with approved
 parents and typed domain schemas, assumption contracts, dependency references,
@@ -874,8 +876,9 @@ remain UNSUPPORTED/review. Metadata absence is unknown compatibility.
 
 Host tools treat source as bytes, never import it, reject links and unexpected
 files, seal exact source/spec/test inventories, and stage immutable snapshots.
-Changes to sealed bytes require a new version. Record two repairs at most per
-identified failure; the external agent owns the repair loop and its history.
+Changes to sealed bytes require a new version. Record repair counts and preserve
+every version. During the current diagnostic phase there is no fixed coding-turn
+or repair-count cap unless the operator explicitly supplies one.
 
 Support Docker Engine directly and through Docker sbx's private engine in a
 mountless shell VM. Copy only an explicit trusted build context; exclude .env,
@@ -903,3 +906,48 @@ scripted policy, simultaneous protocol, evaluation adapter, benchmark runner,
 and method contracts without editing core runtime or global registry. Document
 that the scripted action is a fixture and the one-actor Nash optimum is simply
 that actor's own optimum. Do not claim general vector optimization support.
+
+Before another live trial, keep its request and audit fresh and exclude all prior
+experimental bundles/results from model context. General prompts obtain domain
+details from the request. Review dependency names, configuration bindings, test
+syntax/component use and lint before freezing the plan. Preserve scientific
+requirements through repairs. Use independent problem-derived feasibility and
+objective checks, plus a qualified numerical reference where supported. Require
+agent-authored notebook generator code; execute its results notebook inside the
+worker and export it with the authoritative result JSON and matching receipt.
+The next live trial remains unexecuted during this preparation; see
+docs/authoring_preparation.md.
+
+## 25. Native authoring, role separation and task routing
+
+Replace author-produced JSON document strings with native Pydantic bundle,
+configuration and invocation objects. Return a structured plan/implementation or
+needs_review/unsupported outcome; the controller must terminate at a review
+boundary. Normalize formatting before freezing/sealing, retaining raw response
+and normalized hashes. Check grounded reference expectations and core-model
+fixture construction before freezing scientific intent.
+
+Keep the toolkit centered on agent simulations. Use policies, authorized private
+observations/memory, mechanisms, protocols and the canonical runtime when actor
+decisions and interaction are part of the question. Straightforward mathematical
+helpers or transformations use ordinary callables and tests in the tool route,
+without dummy actors or a Nash wrapper. An explicit execution_kind pins the route.
+
+Coding uses MODEL_CODING=muse-spark-1.3 with max reasoning; simulation actors
+continue using MODEL=muse-spark-1.3-contributor. Do not silently fall back from a
+missing coding model to the actor model. No live trial is started by these changes.
+
+Provide optional capability-scoped rejection, reference and parameter checks,
+plus custom VerificationCheck templates with evidence/applicability outcomes.
+Do not invent universal economic restrictions. Derive schemas from exported
+Pydantic classes and distinguish mathematical contracts from ordinary utilities.
+Retain completed intermediate results/notebooks as explicitly unapproved
+diagnostics when other gates fail.
+
+The next proposed experiment is a private-value sealed-bid second-price auction
+with live LLM bidders and a separate truthful-bidding reference. Bidding above a
+valuation is legal. Truthfulness is weakly dominant under the stated textbook
+assumptions, not the unique possible rational action. The request is a fixture
+outside the generic prompt. The offline isolated worker still needs a
+credential-isolated actor-model broker; report this missing capability rather
+than substituting scripted bidders. See docs/task_routing.md.

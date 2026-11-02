@@ -549,7 +549,18 @@ analytical optimum, contract tests, and actual worker restrictions.
 `ExperimentRequest.problem` now accepts a typed numeric problem with scalar/vector
 variables, objectives, and constraints; see [structured problems](docs/problem_statements.md).
 The optional `CodingAgent` adapter injects [its system instructions](prompts/blind_coding_agent.md)
-and a curated source inventory into bounded, auditable API calls, without exposing
+and a curated source inventory into auditable API calls, without exposing
 old experiment bundles. The [first live coding trial](experimental_components/allocation_trial/TRIAL.md)
 made five actual model calls and failed validation; it is retained as a failed
 submission, with no claimed simulation result.
+
+The [next-trial preparation](docs/authoring_preparation.md) adds pre-freeze plan
+and test checks, problem-derived verification, an agent-authored notebook
+generator, and an opt-in workflow with no default coding-turn or repair cap.
+The retained [fresh allocation trial](experimental_components/allocation_live_8f8bf161/TRIAL.md)
+documents the later live failure and its lessons. Current authoring uses native
+Pydantic plan/config objects, structured review outcomes and optional behavioral
+checks. [Task routing](docs/task_routing.md) distinguishes direct callable tools
+from LLM-agent simulations. Coding uses MODEL_CODING (muse-spark-1.3, max reasoning);
+simulation actors retain MODEL (muse-spark-1.3-contributor). These latest changes
+have been tested offline; the proposed auction has not been run.

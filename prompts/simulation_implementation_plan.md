@@ -315,3 +315,16 @@ Readable plan section 24 records external-agent tooling, Docker/sbx workers,
 versioned experimental bundles outside src, and a vector-allocation trial. The
 host never imports extension source, and passing tests does not permit host
 execution or global registration. See docs/experimental_workflow.md.
+
+Section 24 now also records diagnostic preparation following the failed live
+trial: pre-freeze planning/test checks, fresh isolated authoring context,
+independent numeric verification, results-notebook generation/execution/export,
+and no default coding-turn or repair-count cap. The next trial is not started by
+this preparation. See docs/authoring_preparation.md for the explicit future entry
+point and retained per-call/worker limits.
+
+Readable section 25 records native authoring contracts, terminal review outcomes,
+MODEL_CODING/max versus MODEL actor separation, direct-callable versus agent-simulation
+routing, optional scoped verification, and retained unapproved diagnostics. The
+auction request is prepared but not executed; a live actor-model broker remains
+an explicit isolated-worker capability prerequisite.

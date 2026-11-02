@@ -1,4 +1,4 @@
-"""Bounded coding-model calls with explicit, auditable context and no filesystem tools."""
+"""Auditable coding-model calls with explicit context and no filesystem tools."""
 
 import hashlib
 import json
@@ -6,15 +6,22 @@ import os
 from pathlib import Path, PurePosixPath
 from typing import cast
 
-from pydantic import Field
-
 from simulation_core.execution import JobManifest
 from simulation_core.model_gateway import BoundedGateway, ModelGateway, ModelRequest
 from simulation_core.request import ExperimentRequest
-from simulation_core.types import FrozenModel, SimulationConfig
+from simulation_core.types import FrozenModel
 
+from .contracts import (
+    CodingPlan,
+    Implementation,
+    ImplementationResponse,
+    PlanningResponse,
+    ReviewRequest,
+    SourceFile,
+)
 from .inventory import inventory
-from .specs import BundleManifest
+from .jobs import ToolJobManifest
+from .planning import review_plan
 
 SOURCE_FILES = tuple(
     "src/simulation_core/" + name + ".py"
@@ -30,18 +37,20 @@ SOURCE_FILES = tuple(
         "game_view",
         "request",
         "problems",
-        "runtime",
         "benchmark",
         "execution",
-        "registry",
         "observation",
-        "logging",
-        "validation",
-        "provenance",
         "model_gateway",
     )
 ) + (
     "src/agent_tools/specs.py",
+    "src/agent_tools/contracts.py",
+    "src/agent_tools/jobs.py",
+    "src/agent_tools/checks.py",
+    "src/agent_tools/fixtures.py",
+    "src/agent_tools/planning.py",
+    "src/agent_tools/verification.py",
+    "src/simulation_core/reporting.py",
     "src/components/library.py",
     "src/components/policies/scripted.py",
     "src/components/protocols/simultaneous.py",
@@ -51,21 +60,21 @@ SOURCE_FILES = tuple(
 )
 
 
-class SourceFile(FrozenModel):
-    path: str
-    content: str = Field(max_length=250000)
+class AuthoringReviewRequired(RuntimeError):
+    def __init__(self, review: ReviewRequest) -> None:
+        self.review = review
+        super().__init__(review.reason)
 
 
-class CodingPlan(FrozenModel):
-    summary: str = Field(min_length=1, max_length=3000)
-    bundle_json: str = Field(min_length=1, max_length=150000)
-    simulation_json: str = Field(min_length=1, max_length=100000)
-    tests: tuple[SourceFile, ...] = Field(min_length=1, max_length=30)
+class AuthoringBudgetError(ValueError):
+    pass
 
 
-class Implementation(FrozenModel):
-    summary: str = Field(min_length=1, max_length=3000)
-    files: tuple[SourceFile, ...] = Field(min_length=1, max_length=40)
+class PlanValidationError(ValueError):
+    def __init__(self, plan: CodingPlan, issues: tuple[str, ...]) -> None:
+        self.plan = plan
+        self.issues = issues
+        super().__init__("\n".join(issues))
 
 
 def private_json(path: Path, value: object) -> None:
@@ -110,13 +119,24 @@ def build_context(project: Path) -> dict[str, object]:
 
 class CodingAgent:
     def __init__(
-        self, project: Path, gateway: ModelGateway, model: str, audit: Path, *, resume: bool = False
+        self,
+        project: Path,
+        gateway: ModelGateway,
+        model: str,
+        audit: Path,
+        *,
+        resume: bool = False,
+        max_calls: int | None = None,
+        reasoning_effort: str = "max",
+        max_output_tokens: int = 32000,
     ) -> None:
+        self.reasoning_effort = reasoning_effort
+        self.max_output_tokens = max_output_tokens
         self.project = project.resolve()
         self.gateway = BoundedGateway(
             gateway,
-            max_calls=5,
-            max_output_tokens_per_call=18000,
+            max_calls=max_calls,
+            max_output_tokens_per_call=max_output_tokens,
             max_request_chars=1_500_000,
             max_response_chars=600_000,
         )
@@ -126,6 +146,9 @@ class CodingAgent:
         self.instructions = (self.project / "prompts/blind_coding_agent.md").read_text()
         sources = cast(list[dict[str, str]], self.context["sources"])
         manifest = {
+            "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
+            "authoring_contract_version": 2,
             "source_files": [
                 {"path": source["path"], "sha256": source["sha256"]} for source in sources
             ],
@@ -154,50 +177,81 @@ class CodingAgent:
                 ):
                     raise ValueError("Resume payload differs from the audited context")
             self.gateway.calls = len(requests)
-            if self.gateway.calls >= self.gateway.max_calls:
-                raise ValueError("Authoring API budget is exhausted")
+            if self.gateway.max_calls is not None and self.gateway.calls >= self.gateway.max_calls:
+                raise AuthoringBudgetError("Authoring API budget is exhausted")
         else:
             private_json(audit / "context_manifest.json", manifest)
 
-    def call(
-        self, task: dict[str, object], output: type[CodingPlan] | type[Implementation]
-    ) -> CodingPlan | Implementation:
-        if self.gateway.calls >= self.gateway.max_calls:
-            raise ValueError("Authoring API budget is exhausted")
+    @classmethod
+    def from_environment(
+        cls,
+        project: Path,
+        audit: Path,
+        *,
+        resume: bool = False,
+        max_calls: int | None = None,
+        max_output_tokens: int = 32000,
+    ) -> "CodingAgent":
+        from components.gateways.live import configured_coding_gateway
+
+        model, gateway = configured_coding_gateway(env_file=project / ".env")
+        return cls(
+            project,
+            gateway,
+            model,
+            audit,
+            resume=resume,
+            max_calls=max_calls,
+            max_output_tokens=max_output_tokens,
+        )
+
+    def call[T: FrozenModel](self, task: dict[str, object], output: type[T]) -> T:
+        if self.gateway.max_calls is not None and self.gateway.calls >= self.gateway.max_calls:
+            raise AuthoringBudgetError("Authoring API budget is exhausted")
         index = self.gateway.calls + 1
         request = ModelRequest(
             actor_id="coding_agent",
             model=self.model,
-            reasoning_effort="minimal" if self.model.startswith("muse-") else None,
+            reasoning_effort=self.reasoning_effort,
             instructions=self.instructions,
             input_json=json.dumps({**task, "toolkit": self.context}),
             response_schema=output.model_json_schema(),
-            max_output_tokens=18000,
+            response_strict=False,
+            max_output_tokens=self.max_output_tokens,
         )
         private_json(self.audit / f"request-{index}.json", request.model_dump(mode="json"))
         response = self.gateway.complete(request)
         private_json(self.audit / f"response-{index}.json", response.model_dump(mode="json"))
         return output.model_validate_json(response.text)
 
-    def plan(self, request: ExperimentRequest, experiment_id: str) -> CodingPlan:
-        result = self.call(
-            {
-                "stage": "plan_and_tests",
-                "request": request.model_dump(mode="json"),
-                "experiment_id": experiment_id,
-            },
-            CodingPlan,
-        )
+    def plan(
+        self,
+        request: ExperimentRequest,
+        experiment_id: str,
+        *,
+        previous: CodingPlan | None = None,
+        feedback: str | None = None,
+    ) -> CodingPlan:
+        task: dict[str, object] = {
+            "stage": "plan_and_tests",
+            "request": request.model_dump(mode="json"),
+            "experiment_id": experiment_id,
+        }
+        if previous is not None:
+            task["previous_plan"] = previous.model_dump(mode="json")
+        if feedback is not None:
+            task["validation_feedback"] = feedback
+        response = self.call(task, PlanningResponse)
+        if response.review is not None:
+            raise AuthoringReviewRequired(response.review)
+        result = response.plan
         if not isinstance(result, CodingPlan):
             raise TypeError("Expected a coding plan")
-        manifest = BundleManifest.model_validate_json(result.bundle_json)
-        if manifest.experiment_id != experiment_id or manifest.version != "v1":
-            raise ValueError("Plan namespace/version mismatch")
-        JobManifest(
-            request=request, simulation=SimulationConfig.model_validate_json(result.simulation_json)
-        )
-        if any(not safe_source_path(source.path, tests=True) for source in result.tests):
-            raise ValueError("Planning stage may write only acceptance tests")
+        result = result.model_copy(update={"tests": self._normalize(result.tests, "plan")})
+        issues = review_plan(self.project, request, experiment_id, result)
+        private_json(self.audit / f"plan-review-{self.gateway.calls}.json", {"issues": issues})
+        if issues:
+            raise PlanValidationError(result, issues)
         return result
 
     def implement(
@@ -208,6 +262,14 @@ class CodingAgent:
         previous: Implementation | None = None,
         feedback: str | None = None,
     ) -> Implementation:
+        issues = review_plan(
+            self.project,
+            request,
+            plan.bundle.experiment_id,
+            plan,
+        )
+        if issues:
+            raise PlanValidationError(plan, issues)
         task: dict[str, object] = {
             "stage": "implementation" if previous is None else "repair_implementation",
             "request": request.model_dump(mode="json"),
@@ -215,13 +277,24 @@ class CodingAgent:
         }
         if previous is not None:
             task["previous_implementation"] = previous.model_dump(mode="json")
+        if feedback is not None:
             task["validation_feedback"] = feedback
-        result = self.call(task, Implementation)
+        response = self.call(task, ImplementationResponse)
+        if response.review is not None:
+            raise AuthoringReviewRequired(response.review)
+        result = response.implementation
         if not isinstance(result, Implementation):
             raise TypeError("Expected implementation files")
         if any(not safe_source_path(source.path, tests=False) for source in result.files):
             raise ValueError("Implementation may write only its package and README")
-        return result
+        return result.model_copy(update={"files": self._normalize(result.files, "implementation")})
+
+    def _normalize(self, sources: tuple[SourceFile, ...], stage: str) -> tuple[SourceFile, ...]:
+        from .formatting import normalize_sources
+
+        normalized, changes = normalize_sources(self.project, sources)
+        private_json(self.audit / f"format-{stage}-{self.gateway.calls}.json", changes)
+        return normalized
 
 
 def materialize(
@@ -230,17 +303,21 @@ def materialize(
     plan: CodingPlan,
     implementation: Implementation,
     version: int,
-) -> JobManifest:
-    manifest = BundleManifest.model_validate_json(plan.bundle_json)
+) -> JobManifest | ToolJobManifest:
+    manifest = plan.bundle
     manifest = manifest.model_copy(
         update={
             "version": f"v{version}",
             "repair_counts": {} if version == 1 else {"implementation_validation": version - 1},
         }
     )
-    job = JobManifest(
-        request=request, simulation=SimulationConfig.model_validate_json(plan.simulation_json)
-    )
+    job: JobManifest | ToolJobManifest
+    if plan.kind == "tool":
+        assert plan.tool is not None
+        job = ToolJobManifest(request=request, tool=plan.tool)
+    else:
+        assert plan.simulation is not None
+        job = JobManifest(request=request, simulation=plan.simulation)
     if root.exists():
         raise ValueError("Never overwrite an existing experiment version")
     sources = (*plan.tests, *implementation.files)

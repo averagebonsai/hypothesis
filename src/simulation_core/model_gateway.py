@@ -16,6 +16,7 @@ class ModelRequest(FrozenModel):
     instructions: str
     input_json: str
     response_schema: dict[str, JsonValue]
+    response_strict: bool = True
     max_output_tokens: int = Field(gt=0)
 
 
@@ -59,12 +60,14 @@ class BoundedGateway(ModelGateway):
     def __init__(
         self,
         gateway: ModelGateway,
-        max_calls: int = 8,
+        max_calls: int | None = 8,
         max_output_tokens_per_call: int = 1200,
         max_request_chars: int = 100000,
         max_response_chars: int = 20000,
     ) -> None:
-        if min(max_calls, max_output_tokens_per_call, max_request_chars, max_response_chars) <= 0:
+        if (max_calls is not None and max_calls <= 0) or min(
+            max_output_tokens_per_call, max_request_chars, max_response_chars
+        ) <= 0:
             raise ValueError("Gateway budgets must be positive")
         self.gateway = gateway
         self.max_calls = max_calls
@@ -78,7 +81,7 @@ class BoundedGateway(ModelGateway):
         return self.gateway.mode
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        if self.calls >= self.max_calls:
+        if self.max_calls is not None and self.calls >= self.max_calls:
             raise GatewayError("call_budget_exhausted")
         if request.max_output_tokens > self.max_output_tokens_per_call:
             raise GatewayError("output_budget_exceeded")
