@@ -32,11 +32,12 @@ request; they are not defaults in the general coding-agent prompt. It requires
 the Contributor actor model and gives the full Spark model only the coding role.
 This request has not been run.
 
-The current isolated extension worker is offline and cannot yet call live actor
-models. A credential-isolated broker is a prerequisite for that trial. The new
+The validation worker is offline and now has an optional credential-isolated
+host actor relay. The default coding backend is Muse Code headless in its own
+Docker container; see [Muse worker](muse_code_worker.md). The
 structured `unsupported`/`needs_review` outcome lets the agent report this missing
 capability instead of substituting scripted actors. The coding API transport and
-the future actor broker are different capabilities.
+the actor broker are different capabilities.
 
 The earlier simplex trial used a scripted actor. Its task was therefore an
 extension-authoring/integration diagnostic, not an example of live LLM-agent

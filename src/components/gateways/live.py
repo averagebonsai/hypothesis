@@ -18,8 +18,9 @@ def configured_coding_gateway(env_file: Path | None = None) -> tuple[str, ModelG
     """Coding credentials/model are selected independently of simulation actors."""
     return _gateway(
         LiveModelSettings.load(role="coding", env_file=env_file),
-        timeout=180,
+        timeout=900,
         max_response_bytes=800000,
+        stream=True,
     )
 
 
@@ -28,6 +29,7 @@ def _gateway(
     *,
     timeout: float = 45,
     max_response_bytes: int = 200000,
+    stream: bool = False,
 ) -> tuple[str, ModelGateway]:
     gateway_type = (
         MetaResponsesGateway if settings.model.startswith("muse-") else OpenAIResponsesGateway
@@ -37,4 +39,5 @@ def _gateway(
         frozenset({settings.model}),
         timeout=timeout,
         max_response_bytes=max_response_bytes,
+        stream=stream,
     )

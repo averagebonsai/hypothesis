@@ -53,6 +53,7 @@ SOURCE_FILES = tuple(
     "src/simulation_core/reporting.py",
     "src/components/library.py",
     "src/components/policies/scripted.py",
+    "src/components/policies/llm.py",
     "src/components/protocols/simultaneous.py",
     "src/components/mechanisms/recording.py",
     "src/components/common/math/scalar.py",
@@ -129,6 +130,8 @@ class CodingAgent:
         max_calls: int | None = None,
         reasoning_effort: str = "max",
         max_output_tokens: int = 32000,
+        instructions_path: Path | None = None,
+        access_description: str = "Explicit API payload only; no filesystem, shell, web, retrieval, or code-execution tools supplied",
     ) -> None:
         self.reasoning_effort = reasoning_effort
         self.max_output_tokens = max_output_tokens
@@ -143,7 +146,9 @@ class CodingAgent:
         self.model = model
         self.audit = audit
         self.context = build_context(self.project)
-        self.instructions = (self.project / "prompts/blind_coding_agent.md").read_text()
+        self.instructions = (
+            instructions_path or self.project / "prompts/blind_coding_agent.md"
+        ).read_text()
         sources = cast(list[dict[str, str]], self.context["sources"])
         manifest = {
             "model": self.model,
@@ -153,7 +158,7 @@ class CodingAgent:
                 {"path": source["path"], "sha256": source["sha256"]} for source in sources
             ],
             "instructions_sha256": hashlib.sha256(self.instructions.encode()).hexdigest(),
-            "access": "Explicit API payload only; no filesystem, shell, web, retrieval, or code-execution tools supplied",
+            "access": access_description,
             "excluded": [
                 "experimental_components/**",
                 "tests/**",
@@ -191,7 +196,28 @@ class CodingAgent:
         resume: bool = False,
         max_calls: int | None = None,
         max_output_tokens: int = 32000,
+        backend: str = "muse",
+        sandbox: str | None = None,
     ) -> "CodingAgent":
+        if backend == "muse":
+            from components.gateways.settings import LiveModelSettings
+
+            from .muse import MuseCodeGateway
+
+            settings = LiveModelSettings.load(role="coding", env_file=project / ".env")
+            return cls(
+                project,
+                MuseCodeGateway(project, audit / "muse", settings.api_key, sandbox=sandbox),
+                settings.model,
+                audit,
+                resume=resume,
+                max_calls=max_calls,
+                max_output_tokens=max_output_tokens,
+                instructions_path=project / "prompts/muse_coding_agent.md",
+                access_description="Muse Code filesystem and command tools inside a fresh Docker container; trusted toolkit read-only; no host workspace, history, or past experiments",
+            )
+        if backend != "api":
+            raise ValueError("Coding backend must be muse or api")
         from components.gateways.live import configured_coding_gateway
 
         model, gateway = configured_coding_gateway(env_file=project / ".env")

@@ -5,20 +5,22 @@ the current contracts, not the protocol used in those historical trials.
 
 ## Roles and execution routes
 
-`CodingAgent.from_environment(project, audit)` selects MODEL_CODING from the host
+`CodingAgent.from_environment(project, audit, sandbox="hypothesis-worker")` now
+uses Muse Code headless in Docker. It selects MODEL_CODING from the host
 .env/environment and requests muse-spark-1.3 with max reasoning. It never falls back
 to MODEL. `configured_gateway()` and existing live simulation examples continue
-using MODEL, normally muse-spark-1.3-contributor. API_KEY remains host-only. Neither
-factory makes a model call until explicitly invoked. See Meta's
+using MODEL, normally muse-spark-1.3-contributor. Actor API_KEY remains host-only. The authenticated coding CLI receives its key
+through runtime stdin, without a .env mount or key environment variable. Neither
+factory makes a model call until explicitly invoked. See [Muse worker](muse_code_worker.md). See Meta's
 [reasoning documentation](https://dev.meta.ai/docs/reasoning) for max support.
 
 ExperimentRequest.execution_kind selects tool, agent_simulation, or auto. A tool
 plan invokes a namespaced callable without actors, a protocol, a mechanism or a
 Nash wrapper. Agent simulations use the established interfaces and keep actor
 decisions separate from mathematical references. See [task routing](task_routing.md)
-and the proposed input-only second-price auction request. The isolated worker is
-still offline: live LLM actors need a credential-isolated broker. Missing actor
-access must be reported rather than replaced by scripted decisions.
+and the proposed input-only second-price auction request. The validation worker remains offline; an optional credential-isolated host
+relay now registers llm.v1 for actual actor calls. Missing actor access must
+still be reported rather than replaced by scripted decisions.
 
 ## Native authoring documents
 
@@ -30,8 +32,9 @@ ReviewRequest. A structured needs_review/unsupported outcome terminates the loop
 immediately and retains the last receipt/candidate; it does not consume more calls
 trying to work around frozen requirements. run_authoring returns AuthoringOutcome.
 
-Coding responses use Meta's non-strict structured-schema surface for open native
-maps. The JsonValue schema is represented as unconstrained JSON to remove its
+The Muse CLI writes normal source files and assembles a Pydantic-validated native
+response locally. The optional `backend="api"` still uses Meta's non-strict
+structured-schema surface for open native maps. The JsonValue schema is represented as unconstrained JSON to remove its
 recursive schema definition; Pydantic still validates the complete decoded object,
 including fixed fields, finite values and instance-level validators. There is no
 JSON-inside-a-string workaround. Actor response handling remains strict. Meta's

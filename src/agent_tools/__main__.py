@@ -1,4 +1,4 @@
-"""CLI for external agents; no generation, scientific inference, or repair loop."""
+"""Component inspection, isolated validation, and opt-in Muse Code authoring."""
 
 import argparse
 import json
@@ -24,6 +24,12 @@ def main() -> None:
     commands.add_parser("inventory")
     commands.add_parser("create-sandbox")
     commands.add_parser("prepare")
+    author = commands.add_parser(
+        "author", help="Create and validate a fresh experiment with Muse Code"
+    )
+    author.add_argument("--request", type=Path, required=True)
+    author.add_argument("--experiment-id", required=True)
+    author.add_argument("--backend", choices=("muse", "api"), default="muse")
     for command in ("seal", "inspect", "validate", "run"):
         subparser = commands.add_parser(command)
         subparser.add_argument("bundle", type=Path)
@@ -31,7 +37,42 @@ def main() -> None:
             subparser.add_argument("--job", type=Path, required=True)
     args = parser.parse_args()
     worker = DockerWorker(args.project, sandbox=args.sandbox)
-    if args.command == "inventory":
+    if args.command == "author":
+        import re
+
+        from components.gateways.live import configured_gateway
+        from simulation_core.request import ExperimentRequest
+
+        from .authoring import CodingAgent, private_json
+        from .specs import WorkerLimits
+        from .workflow import run_authoring
+
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", args.experiment_id):
+            parser.error("experiment-id must be a simple lowercase namespace")
+        request = ExperimentRequest.model_validate_json(args.request.read_text())
+        root = args.project.resolve() / "experimental_components"
+        audit = root / "_authoring" / args.experiment_id
+        destination = root / args.experiment_id
+        if audit.exists() or destination.exists():
+            parser.error("Use a fresh experiment namespace")
+        agent = CodingAgent.from_environment(
+            args.project, audit, backend=args.backend, sandbox=args.sandbox
+        )
+        model, gateway = configured_gateway()
+        worker = DockerWorker(
+            args.project,
+            sandbox=args.sandbox,
+            actor_gateway=gateway,
+            actor_model=model,
+            limits=WorkerLimits(wall_seconds=900, pids=256),
+        )
+        worker.prepare()
+        outcome = run_authoring(agent, request, args.experiment_id, destination, worker)
+        private_json(audit / "outcome.json", outcome.model_dump(mode="json"))
+        print(outcome.model_dump_json(indent=2))
+        if outcome.status != "completed":
+            raise SystemExit(1)
+    elif args.command == "inventory":
         print(json.dumps(inventory(), indent=2))
     elif args.command == "create-sandbox":
         worker.create_sandbox()

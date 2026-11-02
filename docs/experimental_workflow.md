@@ -2,8 +2,10 @@
 
 This toolkit supports an **external coding agent**. The worker validates and runs
 submitted bundles. An optional host-side `agent_tools.authoring.CodingAgent` adapter
-now makes auditable coding-model calls and records exact prompts and responses; it
-does not give the model host filesystem or execution tools. A controller must
+defaults to Muse Code headless inside a disposable Docker authoring container,
+with file and command tools there and no host filesystem access. It records
+prompts, native artifacts and CLI events. The former direct API backend is opt-in.
+See [Muse Code worker](muse_code_worker.md). A controller must
 orchestrate planning, implementation, validation, and repairs. An external agent
 can also use `prompts/external_coding_agent.md` as its task instructions
 and follows `prompts/newsimulation.md`, uses the planning schemas,

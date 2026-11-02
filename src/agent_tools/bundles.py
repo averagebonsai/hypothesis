@@ -154,9 +154,15 @@ def copy_trusted_context(project: Path, destination: Path) -> str:
     trusted_paths = [
         project / name for name in ("pyproject.toml", "uv.lock", "src", "tests", "docker")
     ]
-    safe_prompt = project / "prompts/blind_coding_agent.md"
-    if safe_prompt.exists():
-        trusted_paths.append(safe_prompt)
+    safe_prompts = [
+        project / "prompts" / name
+        for name in (
+            "blind_coding_agent.md",
+            "muse_coding_agent.md",
+        )
+        if (project / "prompts" / name).exists()
+    ]
+    trusted_paths.extend(safe_prompts)
     if any(path.is_symlink() for root in trusted_paths for path in (root, *root.rglob("*"))):
         raise ValueError("Trusted build inputs cannot contain symbolic links")
     destination.mkdir()
@@ -168,9 +174,10 @@ def copy_trusted_context(project: Path, destination: Path) -> str:
             destination / name,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".*"),
         )
-    if safe_prompt.exists():
+    if safe_prompts:
         (destination / "prompts").mkdir()
-        shutil.copyfile(safe_prompt, destination / "prompts/blind_coding_agent.md")
+        for prompt in safe_prompts:
+            shutil.copyfile(prompt, destination / "prompts" / prompt.name)
     hashes = {
         path.relative_to(destination).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(destination.rglob("*"))

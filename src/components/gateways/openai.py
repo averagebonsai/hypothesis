@@ -1,8 +1,9 @@
 """Trusted Responses API transport. Credentials stay on this host-side object only."""
 
 import json
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Literal
+from typing import BinaryIO, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -85,6 +86,7 @@ class OpenAIResponsesGateway(ModelGateway):
         allowed_models: frozenset[str],
         timeout: float = 45.0,
         max_response_bytes: int = 200000,
+        stream: bool = False,
     ) -> None:
         if not api_key or not allowed_models or timeout <= 0 or max_response_bytes <= 0:
             raise ValueError(
@@ -94,6 +96,53 @@ class OpenAIResponsesGateway(ModelGateway):
         self.allowed_models = allowed_models
         self.timeout = timeout
         self.max_response_bytes = max_response_bytes
+        self.stream = stream
+        self.on_event: Callable[[str], None] | None = None
+
+    def _stream_response(self, response: BinaryIO) -> bytes:
+        """Read bounded SSE frames, accepting only a complete terminal response.
+
+        Never expose reasoning or model content through progress notifications.
+        The terminal response carries the authoritative text and usage metadata.
+        """
+        consumed = 0
+        data_lines: list[bytes] = []
+        for _ in range(1_000_000):
+            line = response.readline(self.max_response_bytes + 1)
+            consumed += len(line)
+            if len(line) > self.max_response_bytes or consumed > self.max_response_bytes * 8:
+                raise GatewayError("provider_response_too_large")
+            if not line:
+                raise GatewayError("provider_stream_interrupted")
+            if line.strip():
+                if line.startswith(b"data:"):
+                    data_lines.append(line[5:].strip())
+                continue
+            if not data_lines:
+                continue
+            payload = b"\n".join(data_lines)
+            data_lines = []
+            if payload == b"[DONE]":
+                raise GatewayError("provider_stream_missing_terminal")
+            try:
+                event = json.loads(payload)
+                kind = event["type"]
+                if kind in {
+                    "response.created",
+                    "response.in_progress",
+                    "response.output_item.added",
+                } and self.on_event is not None:
+                    self.on_event(kind)
+                if kind in {"response.completed", "response.failed", "response.incomplete"}:
+                    raw = json.dumps(event["response"]).encode()
+                    if len(raw) > self.max_response_bytes:
+                        raise GatewayError("provider_response_too_large")
+                    return raw
+                if kind == "error":
+                    raise GatewayError("provider_stream_error")
+            except (ValueError, KeyError, TypeError):
+                raise GatewayError("invalid_provider_stream") from None
+        raise GatewayError("provider_stream_event_limit")
 
     @classmethod
     def from_environment(cls, model: str) -> "OpenAIResponsesGateway":
@@ -126,6 +175,8 @@ class OpenAIResponsesGateway(ModelGateway):
         }
         if request.reasoning_effort is not None:
             body["reasoning"] = {"effort": request.reasoning_effort}
+        if self.stream:
+            body["stream"] = True
         http_request = Request(
             self.endpoint,
             data=json.dumps(body).encode(),
@@ -133,11 +184,16 @@ class OpenAIResponsesGateway(ModelGateway):
             headers={
                 "Authorization": "Bearer " + self._api_key,
                 "Content-Type": "application/json",
+                **({"Accept": "text/event-stream"} if self.stream else {}),
             },
         )
         try:
             with urlopen(http_request, timeout=self.timeout) as response:
-                raw = response.read(self.max_response_bytes + 1)
+                raw = (
+                    self._stream_response(response)
+                    if self.stream
+                    else response.read(self.max_response_bytes + 1)
+                )
         except HTTPError as exc:
             raise GatewayError(f"http_{exc.code}") from None
         except (URLError, TimeoutError, OSError):

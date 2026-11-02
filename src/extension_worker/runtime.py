@@ -27,6 +27,7 @@ from simulation_core.protocol import ProtocolRules
 from simulation_core.registry import ComponentRegistry
 from simulation_core.solver import GameView, Solver
 
+from .actor_relay import ENV, RelayGateway, serve
 from .diagnostics import read as read_diagnostic
 from .verification import assess
 
@@ -67,7 +68,7 @@ def load_registry(root: Path) -> tuple[BundleManifest, ComponentRegistry]:
                 f"Dependency requires approval and a new trusted lock/image: {dependency}"
             )
         importlib.metadata.version(dependency)
-    registry = standard_registry()
+    registry = standard_registry(RelayGateway() if os.environ.get(ENV) else None)
     # Trusted core imports above precede the experimental import path.
     sys.path.append(str(root))
     for component in manifest.components:
@@ -305,7 +306,10 @@ def main() -> None:
     require_container()
     # Ordinary experimental print output cannot contaminate the structured response.
     try:
-        with contextlib.redirect_stdout(sys.stderr):
+        with (
+            serve(os.environ.get("HYPOTHESIS_ENABLE_ACTORS") == "1"),
+            contextlib.redirect_stdout(sys.stderr),
+        ):
             response = execute(sys.argv[1], sys.argv[2])
     except Exception as exc:  # noqa: BLE001 - structured diagnostics at the isolated process boundary
         response = WorkerResponse(

@@ -4,6 +4,7 @@ import os
 import selectors
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -18,15 +19,30 @@ class ProcessLimitError(RuntimeError):
     pass
 
 
-def bounded_command(args: list[str], *, seconds: int, max_bytes: int) -> ProcessResult:
+def bounded_command(
+    args: list[str],
+    *,
+    seconds: int,
+    max_bytes: int,
+    exchange: Callable[[str], str | None] | None = None,
+    input_text: str | None = None,
+) -> ProcessResult:
     process = subprocess.Popen(
-        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE if exchange or input_text is not None else subprocess.DEVNULL,
     )
     selector = selectors.DefaultSelector()
     buffers = {"stdout": bytearray(), "stderr": bytearray()}
     deadline = time.monotonic() + seconds
     total = 0
+    pending = bytearray()
     try:
+        if input_text is not None:
+            assert process.stdin is not None
+            process.stdin.write(input_text.encode())
+            process.stdin.close()
         for name, pipe in (("stdout", process.stdout), ("stderr", process.stderr)):
             if pipe is None:
                 raise RuntimeError("Missing subprocess pipe")
@@ -43,7 +59,21 @@ def bounded_command(args: list[str], *, seconds: int, max_bytes: int) -> Process
                 total += len(data)
                 if total > max_bytes:
                     raise ProcessLimitError("Worker command exceeded its output budget")
-                buffers[key.data].extend(data)
+                if key.data == "stdout" and exchange is not None:
+                    pending.extend(data)
+                    while b"\n" in pending:
+                        line, _, rest = pending.partition(b"\n")
+                        pending = bytearray(rest)
+                        reply = exchange(line.decode("utf-8"))
+                        if reply is None:
+                            buffers["stdout"].extend(line + b"\n")
+                        else:
+                            assert process.stdin is not None
+                            process.stdin.write((reply + "\n").encode())
+                            process.stdin.flush()
+                else:
+                    buffers[key.data].extend(data)
+        buffers["stdout"].extend(pending)
         code = process.wait(timeout=max(0.01, deadline - time.monotonic()))
         return ProcessResult(
             code,
@@ -54,6 +84,6 @@ def bounded_command(args: list[str], *, seconds: int, max_bytes: int) -> Process
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
-        for pipe in (process.stdout, process.stderr):
+        for pipe in (process.stdout, process.stderr, process.stdin):
             if pipe:
                 pipe.close()

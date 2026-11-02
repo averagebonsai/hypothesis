@@ -25,6 +25,9 @@ SHAPES = {
 
 def inventory() -> dict[str, JsonValue]:
     result = standard_registry().describe()
+    # Discoverable even when this host has not enabled live execution. The worker
+    # still requires an explicitly supplied host relay before binding this policy.
+    result["policies"] = ["scripted.v1", "llm.v1"]
     result["decision_shapes_per_actor"] = {key: list(value) for key, value in SHAPES.items()}
     result["shared_tools"] = {
         "components.common.math.scalar.maximize_scalar": {
@@ -40,7 +43,7 @@ def inventory() -> dict[str, JsonValue]:
     }
     result["limitations"] = [
         "Metadata is curated; absent metadata is unknown, not proof of compatibility",
-        "LLM policies require gateway injection and are disabled in offline extension workers",
+        "llm.v1 requires host-enabled actor relay; disabled unless the operator supplies actor_gateway and actor_model to DockerWorker. Credentials stay on the host.",
     ]
     result["approved_python_distributions"] = list(get_args(PythonDistribution))
     result["task_routes"] = {

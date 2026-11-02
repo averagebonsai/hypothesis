@@ -1,0 +1,15 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "7442e10977f3ebed5161e1efa8491d9c8f40618b4be5fab9bed86ec052e9cf9b",
+    "experiment_extension/__init__.py": "4984acc8b10862e0d288a748f6804535c2675c29ffb63ddf1f488b82f1887d8d",
+    "experiment_extension/auction.py": "1608d31b475d9ae43972119aa3443c8c11380af079642bf9a18919361f2d0bcd",
+    "job.example.json": "3bd50de901a34da1c1a1476f44b37bef99a049a9b6a53bf1df6e09af94d714af",
+    "tests/auction_fixtures.py": "70ea93c2b7c1abf3c35be3fd8e78166f02802ae0f6996f3f12c62044d9fecd27",
+    "tests/test_bid.py": "52e0e560b96014b8d1d59f5a65d06c59531a62253b89e5ba31f8686952559feb",
+    "tests/test_mechanism.py": "70b2a9891c029447433b202f45c336a7591200fc1e0450c57c044c4eabfb576b",
+    "tests/test_reference.py": "d5684d73d5cb0ca4b2b129818cdfbcf2db8b5d5886809874d4bf766ea2efd5db",
+    "tests/test_verification.py": "835df2c269a3db64bb8a14d7513aec73716fe21d7214f0d270a57d218d672302"
+  },
+  "digest": "596c1d51694e960fa6fb4ebae7fcc4a116203d4d490f63822be693e254d3d496"
+}

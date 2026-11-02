@@ -18,6 +18,7 @@ RUN uv sync --locked --no-editable
 COPY tests ./tests
 COPY docker ./docker
 COPY prompts/blind_coding_agent.md ./prompts/blind_coding_agent.md
+COPY prompts/muse_coding_agent.md ./prompts/muse_coding_agent.md
 ENV PATH="/opt/toolkit/.venv/bin:$PATH"
 USER 10001:10001
 WORKDIR /tmp

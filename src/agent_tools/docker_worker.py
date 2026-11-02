@@ -10,6 +10,7 @@ from typing import Literal
 from uuid import uuid4
 
 from simulation_core.execution import JobManifest
+from simulation_core.model_gateway import ModelGateway
 
 from .bundles import copy_trusted_context, snapshot_bundle, verify_bundle
 from .jobs import ToolJobManifest
@@ -27,12 +28,18 @@ class DockerWorker:
         docker: str = "docker",
         sbx: str = "sbx",
         limits: WorkerLimits | None = None,
+        actor_gateway: ModelGateway | None = None,
+        actor_model: str | None = None,
     ) -> None:
         self.project = project.resolve()
         self.sandbox = sandbox
         self.docker = docker
         self.sbx = sbx
         self.limits = limits or WorkerLimits()
+        if (actor_gateway is None) != (actor_model is None):
+            raise ValueError("Actor gateway and allowed model must be configured together")
+        self.actor_gateway = actor_gateway
+        self.actor_model = actor_model
         if sandbox and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9.-]+", sandbox):
             raise ValueError("Invalid sandbox name")
 
@@ -139,6 +146,11 @@ class DockerWorker:
                 raise ValueError("Mount path contains unsupported delimiter")
         return self._docker(
             "run",
+            *(
+                ["--interactive", "--env", "HYPOTHESIS_ENABLE_ACTORS=1"]
+                if self.actor_gateway
+                else []
+            ),
             "--rm",
             "--name",
             name,
@@ -211,6 +223,20 @@ class DockerWorker:
                 (job_dir / "probes.json").chmod(0o644)
             remote = f"/tmp/hypothesis-run-{uuid4().hex}"
             name = f"hypothesis-worker-{uuid4().hex}"
+            exchange = None
+            if self.actor_gateway is not None and isinstance(job, JobManifest):
+                from .actor_relay import ActorRelay
+
+                assert self.actor_model is not None
+                actor_audit = (
+                    bundle.parent.parent
+                    / "_runs"
+                    / bundle.parent.name
+                    / bundle.name
+                    / ("actors-" + uuid4().hex)
+                )
+                relay = ActorRelay(self.actor_gateway, self.actor_model, job, actor_audit)
+                exchange = relay.exchange
             try:
                 mount = str(stage)
                 if self.sandbox:
@@ -222,6 +248,7 @@ class DockerWorker:
                     ),
                     seconds=self.limits.wall_seconds,
                     max_bytes=self.limits.output_bytes,
+                    exchange=exchange,
                 )
                 if result.code:
                     raise RuntimeError(

@@ -1,12 +1,14 @@
 # Instructions for an external simulation-creating coding agent
 
 This is the general SOP for an external agent with operator-provided development
-tools. The API-backed `agent_tools.authoring.CodingAgent` loads
+tools. The default `CodingAgent.from_environment` uses Muse Code in Docker and
+loads `prompts/muse_coding_agent.md`. The optional direct-API backend loads
 `prompts/blind_coding_agent.md` instead: it defines the same general responsibilities
 for structured API responses without filesystem or execution tools. Neither
 prompt supplies experiment-specific facts; these belong in ExperimentRequest and
 the resolved SimulationConfig. A prompt file is not automatically loaded merely
-because it exists in this directory.
+because it exists in this directory. See `docs/muse_code_worker.md` for the active
+CLI adapter and authentication boundary.
 
 Use the approved toolkit to implement the user's experiment. You are responsible
 for planning and authoring components; an optional host controller can orchestrate
@@ -40,7 +42,8 @@ your API responses, validation and repair feedback. Follow `prompts/newsimulatio
 6. Seal the bundle using agent_tools. Have the operator/controller submit it to
    the isolated worker; never import the bundle or run its tests on the host.
    A missing worker, failed login, or failed isolation is a blocker, not permission
-   to fall back to host execution. Do not pass API keys or `.env` to the worker.
+   to fall back to host execution. Do not pass API keys or `.env` to the validation worker. The separate Muse
+   authoring container authenticates through a runtime stdin key, without mounting `.env`.
 7. Use the worker's complete validation receipt to classify failures. Repair
    unambiguous implementation defects in a new version. Keep stable failure IDs
    without a fixed repair/turn cap during the current diagnostic phase, unless

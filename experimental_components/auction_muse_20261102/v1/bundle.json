@@ -1,0 +1,339 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "auction_muse_20261102",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Run one sealed-bid second-price round with three live LLM bidders and compare their bids, winner, payment, and payoffs against a post-commitment truthful-bidding reference.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "live_private_value_bidding",
+          "description": "Three LLM bidders each submit one scalar sealed bid from private valuations through live schema-constrained decisions.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "one bid per bidder",
+            "schema-constrained JSON",
+            "live model decisions"
+          ],
+          "timing": "single simultaneous sealed-bid round",
+          "evaluation": "stochastic",
+          "required_guarantees": [
+            "private valuations never shared across actors before commitment"
+          ]
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1"
+        ],
+        "reason": "llm.v1 gives schema-constrained per-actor LLM decisions with bounded retries through the credential-isolated host relay, with reasoning_effort null and max_output_tokens 2000.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "sealed_simultaneous_round",
+          "description": "One simultaneous round collecting exactly one action per bidder with no sequential leakage.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "exactly one action per bidder"
+          ],
+          "timing": "one round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "simultaneous.v1 with rounds=1 collects one joint batch; the simultaneous schedule plus per-actor observation permissions implements sealed bidding.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "second_price_settlement",
+          "description": "Finite-nonnegative bid domain with highest-wins, second-price payment, quasi-linear utilities, and configuration-order tie-breaks, reusable across bidders and valuations.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "finite nonnegative bids",
+            "over- and under-valuation bids legal",
+            "highest wins and pays second-highest",
+            "ties broken by configuration order",
+            "no reserve and no budgets"
+          ],
+          "timing": "settlement after commitment",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "reusable across configured bidders and valuations",
+            "no hardcoded winner or payment"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No inventory mechanism implements second-price auctions; extend Mechanism with a reusable settlement plus its bid action schema and parameter schema.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "truthful_reference",
+          "description": "Post-commitment truthful-bidding reference (bids equal valuations, winner, payment, utilities) with a weak-dominance explanation.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [
+            "computed after actor commitment",
+            "no unique-equilibrium claim"
+          ],
+          "timing": "after actor commitment",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "A small pure utility computed after commitment suffices; no Nash solver or GameView is needed and benchmark stays null.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "settlement_verification",
+          "description": "Custom verification of allocation, payment, utilities, tie-breaks, bid legality, and observation privacy.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "after the run",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Piecewise auction rules do not fit the numeric-expression problem language, so a VerificationCheck subclass recomputes the settlement independently from committed actions and recorded observations.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "results_reporting",
+          "description": "Executed notebook comparing actual bids, winner, payment, payoffs, and rationales against the truthful reference.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [
+            "no actor or model calls from notebook cells"
+          ],
+          "timing": "after the run",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "COMPOSE",
+        "selected_components": [
+          "simulation_core.reporting"
+        ],
+        "reason": "Compose reporting result helpers with the auction truthful-reference utility and matplotlib comparisons in a generator that reads only the recorded result.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.auction_muse_20261102.auction.bid",
+      "kind": "action_schema",
+      "purpose": "Finite nonnegative sealed-bid payload; bids above or below valuation stay legal.",
+      "gap_id": "second_price_settlement",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.auction:BidPayload",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_bid_schema_accepts_finite_nonnegative",
+          "category": "functional",
+          "expected": "Finite nonnegative bids validate, including zero and integer-valued bids.",
+          "reference": "User rule: a bid is a finite nonnegative number."
+        },
+        {
+          "name": "test_bid_schema_rejects_invalid_bids",
+          "category": "failure",
+          "expected": "Negative, NaN, infinite, boolean, string, and missing bids raise validation errors.",
+          "reference": "User rule: a bid is a finite nonnegative number."
+        },
+        {
+          "name": "test_bid_schema_preserves_exact_amount",
+          "category": "functional",
+          "expected": "Validation keeps the exact submitted amount without rounding, clamping, or defaulting.",
+          "reference": "User rule: the winner pays the second-highest submitted bid exactly."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_muse_20261102.auction",
+      "kind": "mechanism",
+      "purpose": "Reusable second-price settlement: highest bid wins, pays the second-highest bid, configuration-order tie-breaks, and quasi-linear utilities from private valuations.",
+      "gap_id": "second_price_settlement",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.auction:SecondPriceMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.auction_muse_20261102.auction.bid"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_settles_second_price",
+          "category": "functional",
+          "expected": "Highest bid wins and pays the second-highest bid; the winner earns valuation minus payment and losers earn zero.",
+          "reference": "User rule: highest bid wins, pays the second-highest bid; utility is own valuation minus payment, others zero."
+        },
+        {
+          "name": "test_mechanism_breaks_ties_by_config_order",
+          "category": "functional",
+          "expected": "Tied highest bids resolve to the earliest bidder in configuration order with payment equal to the tied amount.",
+          "reference": "User rule: break highest-bid ties by configuration order."
+        },
+        {
+          "name": "test_mechanism_allows_strategically_poor_bids",
+          "category": "functional",
+          "expected": "Bids above valuation (even with negative winner utility) and below valuation validate and settle normally.",
+          "reference": "User rule: do not reject a bid merely because it is strategically poor."
+        },
+        {
+          "name": "test_mechanism_rejects_illegal_actions",
+          "category": "failure",
+          "expected": "Negative or nonfinite bids, wrong action kinds, incomplete profiles, and unknown actors raise errors.",
+          "reference": "User rules: finite nonnegative bids with one action per bidder in a single sealed round."
+        },
+        {
+          "name": "test_mechanism_reusable_across_valuations",
+          "category": "functional",
+          "expected": "Changed valuations, bids, and tie-break orders settle from configuration with no hardcoded winner or payment.",
+          "reference": "User requirement: keep auction rules reusable across configured bidders and valuations."
+        },
+        {
+          "name": "test_mechanism_records_history_and_state",
+          "category": "integration",
+          "expected": "Transition appends the bid profile and records winner, payment, and payoffs; state validation accepts the result and rejects tampered records.",
+          "reference": "User requirements: recording runtime interfaces with custom verification of allocation, payment, and utilities."
+        },
+        {
+          "name": "test_mechanism_config_enforces_sealed_observations",
+          "category": "integration",
+          "expected": "The draft configuration validates and each bidder observes only the public rules plus its own valuation and memory.",
+          "reference": "User rule: bidders see the auction rules and only their own private valuation and memory."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_muse_20261102.auction",
+      "kind": "parameter_schema",
+      "purpose": "Reusable auction configuration: record field names, tie-break order, and the pricing, values, utility, item, reserve, and budget conventions.",
+      "gap_id": "second_price_settlement",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.auction:AuctionParameters",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_auction_params_accepts_reusable_config",
+          "category": "functional",
+          "expected": "A full auction configuration validates, and omitted field names fall back to documented defaults.",
+          "reference": "User requirement: record textbook conventions and the tie-break convention in configuration."
+        },
+        {
+          "name": "test_auction_params_rejects_bad_config",
+          "category": "failure",
+          "expected": "Duplicate or empty tie-break entries, unknown pricing or values models, nonzero reserve, and clashing field names raise errors.",
+          "reference": "User requirements: no reserve, second-price payment, configuration-order tie-breaks."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_muse_20261102.auction.truthful_reference",
+      "kind": "utility",
+      "purpose": "Pure post-commitment truthful-bidding reference mapping valuations and bidder order to bids, winner, payment, and utilities.",
+      "gap_id": "truthful_reference",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.auction:truthful_reference",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_truthful_reference_matches_valuations",
+          "category": "mathematical",
+          "expected": "Truthful bids equal valuations with winner, payment, and utilities matching second-price arithmetic on 90, 65, and 40.",
+          "reference": "User rule: compute the truthful-bidding reference from private valuations after commitment."
+        },
+        {
+          "name": "test_truthful_reference_breaks_ties_by_order",
+          "category": "mathematical",
+          "expected": "Equal valuations resolve by the supplied bidder order with payment equal to the tied value.",
+          "reference": "User rule: break highest-bid ties by configuration order."
+        },
+        {
+          "name": "test_truthful_reference_rejects_invalid_inputs",
+          "category": "failure",
+          "expected": "Empty, mismatched, negative, or nonfinite valuations or orders raise errors.",
+          "reference": "User rule: truthful bids are finite nonnegative valuations over exactly the configured bidders."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [
+    "matplotlib",
+    "nbformat"
+  ],
+  "repair_counts": {},
+  "notebook": {
+    "generator": "experiment_extension.auction:generate_results_notebook"
+  },
+  "verification": {
+    "variables": [],
+    "objectives": [],
+    "independent_reference": "none",
+    "tolerance": 1e-9,
+    "reference_cases": [],
+    "action_behavior": "custom",
+    "parameter_cases": [],
+    "custom_checks": [
+      {
+        "id": "auction_settlement",
+        "symbol": "experiment_extension.auction:AuctionSettlementCheck",
+        "required": true,
+        "purpose": "Independently recompute winner, payment, and utilities from committed bids and initial private valuations with configuration-order tie-breaks; verify bid legality and that recorded observations exposed only each bidder's own valuation."
+      }
+    ]
+  }
+}

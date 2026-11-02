@@ -1,0 +1,427 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "How do private-value LLM bidders behave in a sealed-bid second-price auction compared with truthful bidding?",
+    "execution_kind": "agent_simulation",
+    "problem": null,
+    "supplied_inputs": [
+      {
+        "name": "bidder_a private valuation",
+        "value": 90.0,
+        "target_path": "/world/initial_private_state/bidder_a/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_b private valuation",
+        "value": 65.0,
+        "target_path": "/world/initial_private_state/bidder_b/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_c private valuation",
+        "value": 40.0,
+        "target_path": "/world/initial_private_state/bidder_c/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_a actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/0/policy_parameters/model",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_b actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/1/policy_parameters/model",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_c actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/2/policy_parameters/model",
+        "source_reference": null
+      }
+    ],
+    "requirements": [
+      "This is an agent simulation, not a standalone optimization task. Use the existing policy, observation/privacy, protocol, mechanism, runtime and recording interfaces.",
+      "Actors are bidder_a, bidder_b and bidder_c in that configuration order. Each is an LLM policy using MODEL, not a scripted fixture. MODEL_CODING is only for the external coding agent.",
+      "One simultaneous sealed-bid round, one action per bidder. Bidders see the auction rules and only their own private valuation/memory, never another bidder's private state or submitted bid before committing.",
+      "Textbook independent private values with risk-neutral quasi-linear utility, one indivisible item, no reserve and no budget constraints. Record these assumptions in configuration.",
+      "A bid is a finite nonnegative number. Bidding above or below one's valuation is legal. Do not reject a bid merely because it is strategically poor or would produce negative utility.",
+      "Highest bid wins, pays the second-highest submitted bid, and has utility own valuation minus payment. Other bidders pay zero and have utility zero. Break highest-bid ties by the stated configuration order and record that convention.",
+      "Compute a separate truthful-bidding reference from private valuations after the LLM decisions are committed. Explain that truthfulness is weakly dominant under these assumptions; do not claim it is the unique equilibrium or label every nontruthful bid irrational.",
+      "Provide custom verification for allocation, payment, utilities, ties and bid legality. Do not force the piecewise auction rules into an unsuitable numeric expression language or invent irrelevant simplex/budget checks.",
+      "Generate an executed results notebook comparing actual bids with private valuations and the truthful reference, actual versus reference winners/payments/payoffs, and the recorded decision rationales and assumptions.",
+      "The operator has enabled the credential-isolated host actor relay. Use the existing llm.v1 policy; it is registered by the validation worker with its relay. Never implement another provider transport. All actor reasoning_effort values must be null and max_output_tokens should be 2000. The CLI coding agent uses MODEL_CODING independently of actor MODEL.",
+      "A simple truthful-reference utility, computed after actor commitment, is sufficient for this auction. You need not implement a new Nash Solver or GameView: benchmark=null is acceptable when the custom report independently calculates and displays the truthful bids, winner, payment and utilities alongside the actual results, including plots. Keep auction rules reusable across configured bidders and valuations; do not hardcode the supplied winning bidder, payment or numerical reference in implementation code."
+    ]
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "bidder_a",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "bid": "experimental.auction_muse_20261102.auction.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+            "persona": "You are bidder_a and decide only your own sealed bid.",
+            "reasoning_effort": null,
+            "required_fields": [
+              "rules"
+            ],
+            "max_attempts": 2,
+            "max_calls": 4,
+            "max_output_tokens": 2000
+          }
+        },
+        {
+          "id": "bidder_b",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "bid": "experimental.auction_muse_20261102.auction.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+            "persona": "You are bidder_b and decide only your own sealed bid.",
+            "reasoning_effort": null,
+            "required_fields": [
+              "rules"
+            ],
+            "max_attempts": 2,
+            "max_calls": 4,
+            "max_output_tokens": 2000
+          }
+        },
+        {
+          "id": "bidder_c",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "bid": "experimental.auction_muse_20261102.auction.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+            "persona": "You are bidder_c and decide only your own sealed bid.",
+            "reasoning_effort": null,
+            "required_fields": [
+              "rules"
+            ],
+            "max_attempts": 2,
+            "max_calls": 4,
+            "max_output_tokens": 2000
+          }
+        }
+      ],
+      "parameters": {
+        "action_kind": "bid",
+        "valuation_fact": "valuation",
+        "bids_field": "bids",
+        "winner_field": "winner",
+        "payment_field": "payment",
+        "payoffs_field": "payoffs",
+        "tie_break_order": [
+          "bidder_a",
+          "bidder_b",
+          "bidder_c"
+        ],
+        "pricing": "second_price",
+        "values_model": "independent_private_values",
+        "utility_model": "risk_neutral_quasilinear",
+        "item": "single_indivisible",
+        "reserve": 0.0,
+        "budgets": "none",
+        "allow_above_valuation": true
+      },
+      "initial_public_state": {
+        "rules": "Sealed-bid second-price auction for one indivisible item. Each bidder submits exactly one sealed bid, a finite nonnegative number; bidding above or below your own valuation is allowed. The highest bid wins and pays the second-highest submitted bid. The winner earns its own valuation minus that payment; every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. There is no reserve price and no budget limit. You observe only these public rules and your own private valuation; you cannot see other bidders' valuations or bids before committing.",
+        "bids": []
+      },
+      "initial_private_state": {
+        "bidder_a": {
+          "facts": {
+            "valuation": 90.0
+          },
+          "memory": {}
+        },
+        "bidder_b": {
+          "facts": {
+            "valuation": 65.0
+          },
+          "memory": {}
+        },
+        "bidder_c": {
+          "facts": {
+            "valuation": 40.0
+          },
+          "memory": {}
+        }
+      }
+    },
+    "mechanism_id": "experimental.auction_muse_20261102.auction",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "rounds": 1
+    },
+    "permissions": {
+      "bidder_a": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "bidder_b": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "bidder_c": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      }
+    },
+    "phase_permissions": {},
+    "benchmark": null,
+    "max_steps": 5,
+    "assumptions": [
+      {
+        "path": "/world/parameters/values_model",
+        "value": "independent_private_values",
+        "source": "textbook",
+        "rationale": "Textbook independent private values: each bidder knows only its own valuation.",
+        "reference": "Textbook independent-private-values model (e.g. Krishna, Auction Theory, single-object IPV chapter)"
+      },
+      {
+        "path": "/world/parameters/utility_model",
+        "value": "risk_neutral_quasilinear",
+        "source": "textbook",
+        "rationale": "Risk-neutral quasi-linear utility: the winner earns valuation minus payment, losers earn zero.",
+        "reference": "Textbook risk-neutral quasi-linear utility"
+      },
+      {
+        "path": "/world/parameters/item",
+        "value": "single_indivisible",
+        "source": "user",
+        "rationale": "User requires one indivisible item.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/reserve",
+        "value": 0.0,
+        "source": "user",
+        "rationale": "User requires no reserve price.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/budgets",
+        "value": "none",
+        "source": "user",
+        "rationale": "User requires no budget constraints.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/pricing",
+        "value": "second_price",
+        "source": "user",
+        "rationale": "User requires the winner to pay the second-highest submitted bid.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/tie_break_order",
+        "value": [
+          "bidder_a",
+          "bidder_b",
+          "bidder_c"
+        ],
+        "source": "user",
+        "rationale": "User requires highest-bid ties to be broken by bidder configuration order.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/allow_above_valuation",
+        "value": true,
+        "source": "user",
+        "rationale": "User requires bids above or below valuation to stay legal.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/valuation_fact",
+        "value": "valuation",
+        "source": "model",
+        "rationale": "Trusted settlement reads each valuation from this private fact; actors never observe each other's facts.",
+        "reference": null
+      },
+      {
+        "path": "/protocol_parameters/rounds",
+        "value": 1,
+        "source": "user",
+        "rationale": "User requires one simultaneous sealed-bid round with one action per bidder.",
+        "reference": null
+      },
+      {
+        "path": "/mechanism_id",
+        "value": "experimental.auction_muse_20261102.auction",
+        "source": "model",
+        "rationale": "No inventory mechanism implements second-price auctions, so use the reusable experimental settlement.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_parameters/max_output_tokens",
+        "value": 2000,
+        "source": "user",
+        "rationale": "Operator requirement: actor max_output_tokens should be 2000.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_parameters/reasoning_effort",
+        "value": null,
+        "source": "user",
+        "rationale": "Operator requirement: actor reasoning_effort values must be null.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_parameters/instructions",
+        "value": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+        "source": "model",
+        "rationale": "Neutral rule summary that does not prescribe truthful bidding, so the experiment observes uninstructed behavior.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/1/policy_parameters/max_output_tokens",
+        "value": 2000,
+        "source": "user",
+        "rationale": "Operator requirement: actor max_output_tokens should be 2000.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/1/policy_parameters/reasoning_effort",
+        "value": null,
+        "source": "user",
+        "rationale": "Operator requirement: actor reasoning_effort values must be null.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/1/policy_parameters/instructions",
+        "value": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+        "source": "model",
+        "rationale": "Neutral rule summary that does not prescribe truthful bidding, so the experiment observes uninstructed behavior.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/2/policy_parameters/max_output_tokens",
+        "value": 2000,
+        "source": "user",
+        "rationale": "Operator requirement: actor max_output_tokens should be 2000.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/2/policy_parameters/reasoning_effort",
+        "value": null,
+        "source": "user",
+        "rationale": "Operator requirement: actor reasoning_effort values must be null.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/2/policy_parameters/instructions",
+        "value": "Bid in a sealed-bid second-price auction for one indivisible item with no reserve and no budget limits. Your observation shows the public rules and your own private valuation. Submit exactly one bid as a finite nonnegative number; bids above or below your valuation are legal and will not be rejected. The highest bid wins and pays the second-highest submitted bid, the winner earns its valuation minus that payment, and every other bidder pays nothing and earns zero. Tied highest bids are broken in bidder configuration order. Choose the bid you prefer given your own valuation and the rules, and write a concise rationale citing your valuation. Do not claim knowledge of other bidders' simultaneous uncommitted choices.",
+        "source": "model",
+        "rationale": "Neutral rule summary that does not prescribe truthful bidding, so the experiment observes uninstructed behavior.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/bidder_a",
+        "value": {
+          "public_fields": [
+            "rules"
+          ],
+          "private_fields": [
+            "valuation"
+          ],
+          "readable_memory": true,
+          "writable_private_fields": [],
+          "writable_memory": true
+        },
+        "source": "user",
+        "rationale": "User requires sealed bids: each bidder sees the public rules and only its own valuation and memory.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/bidder_b",
+        "value": {
+          "public_fields": [
+            "rules"
+          ],
+          "private_fields": [
+            "valuation"
+          ],
+          "readable_memory": true,
+          "writable_private_fields": [],
+          "writable_memory": true
+        },
+        "source": "user",
+        "rationale": "User requires sealed bids: each bidder sees the public rules and only its own valuation and memory.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/bidder_c",
+        "value": {
+          "public_fields": [
+            "rules"
+          ],
+          "private_fields": [
+            "valuation"
+          ],
+          "readable_memory": true,
+          "writable_private_fields": [],
+          "writable_memory": true
+        },
+        "source": "user",
+        "rationale": "User requires sealed bids: each bidder sees the public rules and only its own valuation and memory.",
+        "reference": null
+      },
+      {
+        "path": "/max_steps",
+        "value": 5,
+        "source": "model",
+        "rationale": "Single round plus margin; the runtime stops at the terminal tick.",
+        "reference": null
+      }
+    ]
+  }
+}
