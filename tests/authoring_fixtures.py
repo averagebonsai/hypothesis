@@ -80,7 +80,11 @@ def plan():
                     ],
                 }
             ],
-            "notebook": {"generator": "experiment_extension.reporting:write_notebook"},
+            "notebook": {
+                "generator": "experiment_extension.reporting:write_notebook",
+                "report_version": "explanatory.v1",
+                "preview_generator": "experiment_extension.reporting:preview",
+            },
         }
     )
     config = SimulationConfig.model_validate_json(

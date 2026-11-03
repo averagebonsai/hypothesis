@@ -1,0 +1,421 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "auction_session_bdfb4b4a",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Compare LLM bidding in a one-round sealed-bid second-price auction (valuations 90/65/40) against the truthful-bidding reference.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "simultaneous_sealed_bidding",
+          "description": "One simultaneous sealed-bid round with exactly one scalar bid per bidder; no bidder observes another bid before committing.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "simultaneous.v1 runs all actors in one joint round before commitment, matching the sealed-bid timing; sealed privacy comes from per-actor observation permissions, not the protocol.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "llm_bidder_policies",
+          "description": "Three LLM bidder policies deciding from public rules plus their own private valuation only.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [],
+          "timing": "simultaneous single round",
+          "evaluation": "unknown",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1"
+        ],
+        "reason": "llm.v1 supplies schema-constrained LLM decisions from observations with recorded rationales; scientific instructions, personas, and required fields are configured per bidder while the operator resolves transport.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "second_price_rules",
+          "description": "Second-price allocation, payment, and utilities with configuration-order tie-break; strategically poor bids stay legal.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "finite nonnegative bids",
+            "overbidding and underbidding legal"
+          ],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "highest bid wins",
+            "winner pays second-highest bid",
+            "quasi-linear utilities"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved mechanism implements second-price rules: homogeneous_bertrand.v1 allocates to the lowest price, recording.v1 has no payoffs, and normal_form.v1 needs finite payoff tables. A Mechanism subclass implements the auction rules.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "bid_payload",
+          "description": "Scalar bid payload: one finite nonnegative number per bidder.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "finite",
+            "nonnegative"
+          ],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "A dedicated BidPayload gives the bid an explicit finite-nonnegative contract tied to the auction mechanism instead of reusing price-setting semantics.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "truthful_reference",
+          "description": "Separately calculated truthful-bidding reference for benchmark comparison, computed after LLM decisions commit.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "The request asks for a separately calculated truthful strategy profile, not an equilibrium solver or completeness claim; a plain callable computing bids, winner, payment, and payoffs from valuations suffices.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "auction_verification",
+          "description": "Custom verification of allocation, payment, utilities, tie-break, and bid legality.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "independent recomputation from recorded events"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Piecewise auction rules do not fit the numeric expression verification language; a VerificationCheck subclass recomputes allocation, payment, utilities, ties, and legality from the recorded run.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reporting",
+          "description": "Explanatory final notebook plus offline preview through the shared report writers.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "The shared writers supply the five-section/preview structure; experiment-specific generator functions calculate the truthful benchmark, comparisons, and figures outside notebook cells.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.auction_session_bdfb4b4a.second_price_auction",
+      "kind": "mechanism",
+      "purpose": "Sealed-bid second-price auction rules: finite nonnegative bid legality, highest-bid-wins allocation with configuration-order tie-break, second-highest payment, quasi-linear utilities.",
+      "gap_id": "second_price_rules",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.auction:SecondPriceAuctionMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.auction_session_bdfb4b4a.bid_payload",
+        "experimental.auction_session_bdfb4b4a.auction_parameters"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_clearing",
+          "category": "functional",
+          "expected": "Bids 80/70/30 with valuations 90/65/40 clear winner bidder_a, payment 70.0, payoffs 20/0/0; bid history and outcome recorded in public state.",
+          "reference": "Hand-derived second-price outcome: highest bid wins, pays second-highest, quasi-linear utility."
+        },
+        {
+          "name": "test_mechanism_tie_break",
+          "category": "functional",
+          "expected": "Bids 60/60/40 select bidder_a by configuration order with payment 60.0 and payoff 30.0; all-zero bids select bidder_a with payment 0.0.",
+          "reference": "Tie-break convention from the request; with tied top bids the second-highest submitted bid equals the top bid."
+        },
+        {
+          "name": "test_mechanism_overbidding_legal",
+          "category": "functional",
+          "expected": "Bidder_b bidding 100 above valuation 65 is accepted, wins, pays 70 and receives utility -5.0.",
+          "reference": "Request: overbidding is legal and negative utility is not a rejection reason."
+        },
+        {
+          "name": "test_mechanism_rejects_negative_bid",
+          "category": "failure",
+          "expected": "A bid of -1.0 raises during action validation.",
+          "reference": "Request: a bid is a finite nonnegative number."
+        },
+        {
+          "name": "test_mechanism_rejects_nonfinite_bid",
+          "category": "failure",
+          "expected": "Infinite and NaN bids raise during action validation.",
+          "reference": "Request: a bid is a finite nonnegative number."
+        },
+        {
+          "name": "test_mechanism_rejects_wrong_kind",
+          "category": "failure",
+          "expected": "A wrong action kind or an incomplete bidder profile raises.",
+          "reference": "One submit_bid action per bidder per round."
+        },
+        {
+          "name": "test_mechanism_rejects_unsupported_parameters",
+          "category": "failure",
+          "expected": "Nonzero reserve, non-IPV value model, or fewer than two actors raise at config validation.",
+          "reference": "Request fixes a no-reserve IPV auction; a second price needs at least two bids."
+        },
+        {
+          "name": "test_sealed_bid_run_offline",
+          "category": "integration",
+          "expected": "Scripted offline run completes one round with the hand-derived outcome; each observation exposes only public rules plus the actor's own valuation.",
+          "reference": "Runtime plus trusted observation projection; outcome hand-derived for the scripted bids."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.bid_payload",
+      "kind": "action_schema",
+      "purpose": "Scalar bid payload carrying one finite nonnegative bid per bidder.",
+      "gap_id": "bid_payload",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.auction:BidPayload",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_bid_payload_bounds",
+          "category": "functional",
+          "expected": "Bids 0.0 and positive values validate; negative and nonfinite bids raise.",
+          "reference": "Request: a bid is a finite nonnegative number."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.auction_parameters",
+      "kind": "parameter_schema",
+      "purpose": "Typed auction configuration: action/value/history/outcome field names plus fixed IPV, quasi-linear, no-reserve, no-budget, configuration-order settings.",
+      "gap_id": "second_price_rules",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.auction:AuctionParameters",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_auction_parameters_defaults",
+          "category": "functional",
+          "expected": "Defaults validate to sealed second-price IPV settings; unsupported value model, utility model, reserve, budget, or tie-break values raise.",
+          "reference": "Request assumptions: IPV, quasi-linear utility, no reserve, no budgets, configuration-order ties."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.truthful_reference",
+      "kind": "utility",
+      "purpose": "Plain callable computing the truthful-bidding reference (bids equal valuations, winner, payment, payoffs) from private valuations; not an equilibrium solver.",
+      "gap_id": "truthful_reference",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.auction:truthful_reference",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_truthful_reference_main",
+          "category": "mathematical",
+          "expected": "Valuations 90/65/40 give truthful bids, winner bidder_a, payment 65.0, payoffs 25/0/0.",
+          "reference": "Hand-derived Vickrey outcome: highest value wins and pays the second-highest value."
+        },
+        {
+          "name": "test_truthful_reference_tie",
+          "category": "mathematical",
+          "expected": "Valuations 50/50/30 give winner bidder_a by configuration order, payment 50.0, zero payoffs.",
+          "reference": "Hand-derived Vickrey outcome plus the configuration-order tie-break convention."
+        },
+        {
+          "name": "test_truthful_weakly_dominant_sampled",
+          "category": "mathematical",
+          "expected": "With rivals truthful at 65/40, bidder_a deviations across a grid never exceed the truthful payoff 25.0; sampled payoffs match hand-derived values.",
+          "reference": "Textbook weak dominance of truthful bidding under IPV quasi-linear utility; grid payoffs hand-derived from the payment rule."
+        },
+        {
+          "name": "test_truthful_reference_rejects_single_bidder",
+          "category": "failure",
+          "expected": "Fewer than two bidders raises.",
+          "reference": "A second price is undefined without at least two bids."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.auction_checks",
+      "kind": "utility",
+      "purpose": "VerificationCheck subclass recomputing allocation, payment, utilities, tie-break, and bid legality from the recorded run.",
+      "gap_id": "auction_verification",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.checks:AuctionChecks",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_custom_check_verified",
+          "category": "integration",
+          "expected": "Assessment of the recorded scripted run returns verified with allocation, payment, utility, tie-break, and legality evidence.",
+          "reference": "Independent recomputation from committed actions and configured valuations."
+        },
+        {
+          "name": "test_custom_check_detects_tampering",
+          "category": "failure",
+          "expected": "Altered recorded payoffs return failed.",
+          "reference": "Independent recomputation from committed actions and configured valuations."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.preview_notebook",
+      "kind": "utility",
+      "purpose": "Offline (JobManifest, Path) -> Path preview generator explaining the problem, calculated truthful benchmark, assumptions, and limitations.",
+      "gap_id": "reporting",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.report:preview",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.auction_session_bdfb4b4a.truthful_reference"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_preview_notebook_pending",
+          "category": "integration",
+          "expected": "Preview writes preview.ipynb from configuration only, leaving observed results and rationales pending.",
+          "reference": "Notebook contract: offline preview without recorded decisions or performance interpretation."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_session_bdfb4b4a.results_notebook",
+      "kind": "utility",
+      "purpose": "Final (JobResult, Path) -> Path notebook generator comparing actual bids, winner, payment, and payoffs against the truthful reference with recorded rationales.",
+      "gap_id": "reporting",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.report:report",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.auction_session_bdfb4b4a.truthful_reference"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_results_notebook_sections",
+          "category": "integration",
+          "expected": "Report writes results.ipynb with five explanatory sections, the truthful reference comparison, and figures bound to the recorded result.",
+          "reference": "Notebook contract: five sections derived from the saved run, calculations outside cells."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [],
+  "repair_counts": {},
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "preview_generator": "experiment_extension.report:preview",
+    "generator": "experiment_extension.report:report"
+  },
+  "verification": {
+    "variables": [],
+    "objectives": [],
+    "independent_reference": "none",
+    "tolerance": 1e-6,
+    "reference_cases": [],
+    "action_behavior": "custom",
+    "parameter_cases": [],
+    "custom_checks": [
+      {
+        "id": "auction_rules",
+        "symbol": "experiment_extension.checks:AuctionChecks",
+        "required": true,
+        "purpose": "Recompute winner, payment, utilities, tie-break, and bid legality from committed actions and configured valuations; fail on any mismatch."
+      }
+    ]
+  }
+}

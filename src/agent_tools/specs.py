@@ -39,6 +39,12 @@ PythonDistribution = Literal[
 
 
 class NotebookSpec(FrozenModel):
+    report_version: Literal["explanatory.v1"] | None = None
+    preview_generator: str | None = Field(
+        default=None,
+        pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$",
+        description="Offline callable (JobManifest, Path) -> Path writing preview.ipynb; no observed results",
+    )
     generator: str = Field(
         pattern=r"^experiment_extension(?:\.[A-Za-z_][A-Za-z0-9_]*)+:[A-Za-z_][A-Za-z0-9_]*$",
         description="Callable (JobResult, output_directory: Path) -> Path writing results.ipynb",
@@ -236,7 +242,7 @@ class BundleSeal(FrozenModel):
 
 
 class WorkerLimits(FrozenModel):
-    wall_seconds: int = Field(default=180, ge=10, le=900)
+    wall_seconds: int = Field(default=180, ge=10, le=7200)
     memory_mb: int = Field(default=2048, ge=512, le=8192)
     cpus: int = Field(default=2, ge=1, le=4)
     pids: int = Field(default=128, ge=32, le=256)
@@ -303,10 +309,46 @@ class WorkerResponse(FrozenModel):
 
 
 class RunReceipt(FrozenModel):
+    elapsed_seconds: float = Field(default=0, ge=0)
+    checkpoint_directory: str | None = None
+    timings: tuple[dict[str, JsonValue], ...] = ()
     schema_version: Literal["experimental.receipt.v1"] = "experimental.receipt.v1"
     bundle_digest: str
     image_id: str
     framework_digest: str
     limits: WorkerLimits = Field(default_factory=WorkerLimits)
     operation: Literal["validate", "run"]
+    actor_api_attempts: int = Field(default=0, ge=0)
+    replayed_actor_requests: int = Field(default=0, ge=0)
     response: WorkerResponse
+
+
+class ReportResponse(FrozenModel):
+    bundle_digest: str
+    notebook_json: str | None = None
+    verification_findings: tuple[VerificationFinding, ...] = ()
+    error: str | None = None
+    checks: tuple[CheckResult, ...] = ()
+
+    @property
+    def passed(self) -> bool:
+        return (
+            self.error is None
+            and self.notebook_json is not None
+            and all(check.passed for check in self.checks)
+            and all(
+                not finding.required or finding.status == "verified"
+                for finding in self.verification_findings
+            )
+        )
+
+
+class ReportReceipt(FrozenModel):
+    operation: Literal["preview", "report"]
+    bundle_digest: str
+    image_id: str
+    framework_digest: str
+    input_sha256: str
+    actor_api_calls: Literal[0] = 0
+    simulation_rerun: Literal[False] = False
+    response: ReportResponse

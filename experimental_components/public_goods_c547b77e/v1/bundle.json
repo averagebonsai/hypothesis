@@ -1,0 +1,475 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "public_goods_c547b77e",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Run a 10-round public-goods game with endowment withdrawal after round 5, observe how five LLM participants adapt contributions from savings, and compare recorded behavior against closed-form references.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "scheduling",
+          "description": "Ten simultaneous rounds with one contribution per participant per round.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "p1": 1,
+            "p2": 1,
+            "p3": 1,
+            "p4": 1,
+            "p5": 1
+          },
+          "constraints": [
+            "one action per actor per round",
+            "joint commitment before payout"
+          ],
+          "timing": "10 simultaneous rounds",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "complete batches",
+            "fixed 10-round schedule"
+          ]
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "simultaneous.v1 decides all actors each round before joint commitment and its rounds parameter matches the 10-round horizon.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "actor_decisions",
+          "description": "Neutral live LLM contribution choices with a recorded rationale each.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "p1": 1,
+            "p2": 1,
+            "p3": 1,
+            "p4": 1,
+            "p5": 1
+          },
+          "constraints": [
+            "neutral instructions",
+            "recorded rationale",
+            "no prescribed strategy"
+          ],
+          "timing": "simultaneous; rationale recorded per action",
+          "evaluation": "stochastic",
+          "required_guarantees": [
+            "schema-constrained actions"
+          ]
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1",
+          "scripted.v1"
+        ],
+        "reason": "llm.v1 carries the neutral instructions and personas with required observation fields and records a rationale per decision; scripted.v1 gives deterministic offline stand-ins for acceptance.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "public_goods_rules",
+          "description": "Withdrawal schedule, saved balances and linear pool payout with budget legality.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "p1": 1,
+            "p2": 1,
+            "p3": 1,
+            "p4": 1,
+            "p5": 1
+          },
+          "constraints": [
+            "0 <= contribution <= saved balance + round endowment",
+            "finite contributions",
+            "no borrowing against pool payout",
+            "joint batch of N"
+          ],
+          "timing": "simultaneous",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "budget rejection",
+            "payoff formula",
+            "wealth identity",
+            "round-5/6 boundary",
+            "no double counting"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved mechanism matches: recording.v1 has no payoffs and normal-form/Bertrand/Stackelberg rules differ. A Mechanism extension implements the schedule, balances and payout.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "contribution_schema",
+          "description": "Scalar contribution payload for the public-goods mechanism contract.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "p1": 1,
+            "p2": 1,
+            "p3": 1,
+            "p4": 1,
+            "p5": 1
+          },
+          "constraints": [
+            "nonnegative finite contribution"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "exact payload contract"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "A named contribution payload with a nonnegative constraint gives the mechanism an exact registry-checked contract and retryable provider-side guardrails; generic number.v1 lacks the domain field.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reference_trajectories",
+          "description": "Closed-form self-interested and cooperative reference trajectories.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "closed-form references",
+            "stated scope"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Point references are plain utilities, not solver searches: marginal private-return arithmetic plus zero-contribution and full-reinvestment trajectories with hand-derived oracles.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "observation_privacy",
+          "description": "Allowlisted public rules/history plus own-memory-only private state.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [
+            "allowlisted public fields",
+            "own memory only",
+            "no uncommitted leakage"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "permission-filtered observations"
+          ]
+        },
+        "disposition": "COMPOSE",
+        "selected_components": [
+          "simultaneous.v1",
+          "llm.v1"
+        ],
+        "reason": "Trusted observe() allowlists plus simultaneous batching compose the privacy property: public rules, history and balances for all, own memory only, and no visibility into uncommitted simultaneous choices.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reporting",
+          "description": "Five-section explanatory report with an offline pre-execution preview.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "five ordered sections",
+            "results pending in preview"
+          ]
+        },
+        "disposition": "COMPOSE",
+        "selected_components": [
+          "simulation_core.reports.write_experiment_notebook"
+        ],
+        "reason": "Generic explanatory writers render the report and preview; domain code supplies only narrative, references and figures.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.public_goods_c547b77e.public_goods.v1",
+      "kind": "mechanism",
+      "purpose": "Saved-balance public-goods rules: withdrawal schedule, budget legality, linear pool payout and public history.",
+      "gap_id": "public_goods_rules",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.mechanism:PublicGoodsMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.public_goods_c547b77e.contribution.v1"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_requires_joint_actions",
+          "category": "interface",
+          "expected": "requires_joint_actions is True and non-joint schedules are rejected.",
+          "reference": "Framework joint-batch contract; simultaneous protocol composes only with joint mechanisms."
+        },
+        {
+          "name": "test_mechanism_action_schema_contract",
+          "category": "interface",
+          "expected": "Every actor maps exactly {contribute: ContributionPayload}.",
+          "reference": "Registry payload equivalence between mechanism contract and registered schema."
+        },
+        {
+          "name": "test_validate_config_accepts_experiment_parameters",
+          "category": "functional",
+          "expected": "The five-user-parameter configuration validates with zero opening balances.",
+          "reference": "Supplied inputs: N=5, rounds=10, endowed=5, endowment=20, multiplier=2."
+        },
+        {
+          "name": "test_validate_config_rejects_shape_mismatch",
+          "category": "failure",
+          "expected": "Mismatched N, endowed>rounds, nonpositive rounds, N<2, unknown fields and nonzero openings are rejected.",
+          "reference": "Parameter contract: group game with endowed_rounds within horizon and zero start."
+        },
+        {
+          "name": "test_validate_config_rejects_negative_values",
+          "category": "failure",
+          "expected": "Negative or nonfinite endowment/multiplier are rejected.",
+          "reference": "Nonnegative finite economic parameters."
+        },
+        {
+          "name": "test_hand_derived_round_payoffs",
+          "category": "mathematical",
+          "expected": "Contributions [20,10,0,5,15] yield payoffs [20,30,40,35,25] with total 50 and payout 20.",
+          "reference": "Hand arithmetic: payoff = 20 - c + 2*50/5."
+        },
+        {
+          "name": "test_wealth_identity_hand_case",
+          "category": "mathematical",
+          "expected": "Closing wealth 150 equals opening 0 plus 100 plus (2-1)*50.",
+          "reference": "Hand arithmetic on the same profile."
+        },
+        {
+          "name": "test_validate_actions_rejects_over_budget",
+          "category": "failure",
+          "expected": "Contributions above saved balance plus round endowment are rejected.",
+          "reference": "Budget rule with available funds 20 in round 1."
+        },
+        {
+          "name": "test_validate_actions_rejects_negative_and_nonfinite",
+          "category": "failure",
+          "expected": "Negative, boolean, string and nonfinite contributions are rejected.",
+          "reference": "Finite nonnegative contribution domain."
+        },
+        {
+          "name": "test_validate_actions_rejects_partial_batch",
+          "category": "failure",
+          "expected": "Partial, duplicated, wrong-kind or unknown-actor batches are rejected.",
+          "reference": "One joint contribute action per actor."
+        },
+        {
+          "name": "test_large_and_all_in_contributions_legal",
+          "category": "functional",
+          "expected": "Contributions of 30 and all-in 100 from savings are legal with closings 130 and 200.",
+          "reference": "Hand arithmetic from 80 saved plus 20 endowment."
+        },
+        {
+          "name": "test_post_withdrawal_saved_fund_contribution",
+          "category": "functional",
+          "expected": "Round-6 contributions of 25 from 200 saved are legal (closing 225); 500 is rejected; zero is legal.",
+          "reference": "Hand arithmetic with zero endowment after withdrawal."
+        },
+        {
+          "name": "test_poor_strategy_remains_legal",
+          "category": "functional",
+          "expected": "All-in unilateral contribution is accepted despite a negative round payoff.",
+          "reference": "Legality covers strategy, not profitability: closing 40 after payoff -40."
+        },
+        {
+          "name": "test_five_six_round_boundary",
+          "category": "functional",
+          "expected": "Round 5 carries endowment 20 and round 6 carries 0 with round==tick+1 throughout.",
+          "reference": "Withdrawal schedule with six driven rounds of 10."
+        },
+        {
+          "name": "test_no_double_counting_across_rounds",
+          "category": "functional",
+          "expected": "Balances equal cumulative payoffs and history matches outcomes over two rounds.",
+          "reference": "Hand arithmetic: closings [50,60,70,65,55] after the second round."
+        },
+        {
+          "name": "test_observation_privacy_and_memory",
+          "category": "functional",
+          "expected": "Observations expose only allowlisted public fields plus own memory with memory-writable, budget-locked permissions.",
+          "reference": "Trusted observe() allowlists and simultaneous hidden-batch structure."
+        },
+        {
+          "name": "test_parameter_variations",
+          "category": "functional",
+          "expected": "Varied N, horizons, withdrawal timings, endowments and multipliers run with the wealth identity.",
+          "reference": "Hand-checked schedule edges: never-endowed and always-endowed horizons."
+        },
+        {
+          "name": "test_offline_scripted_run",
+          "category": "integration",
+          "expected": "A scripted offline run completes with the wealth identity, rationales and writable memory.",
+          "reference": "Deterministic composition of mechanism, protocol and scripted policies."
+        },
+        {
+          "name": "test_preview_generator_offline",
+          "category": "integration",
+          "expected": "Preview renders from configuration alone and leaves observed results pending.",
+          "reference": "Offline preview contract without actor calls."
+        },
+        {
+          "name": "test_final_generator_binds_recorded_result",
+          "category": "integration",
+          "expected": "Final report binds the recorded result with references, withdrawal-marked trajectories and interpretation from data.",
+          "reference": "Recorded scripted run with N=3, rounds=4, withdrawal after round 2."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_c547b77e.contribution.v1",
+      "kind": "action_schema",
+      "purpose": "Scalar contribution payload contract for the public-goods mechanism.",
+      "gap_id": "contribution_schema",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:ContributionPayload",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_contribution_payload_accepts_valid",
+          "category": "interface",
+          "expected": "Nonnegative int and float contributions validate.",
+          "reference": "Scalar payload domain including zero."
+        },
+        {
+          "name": "test_contribution_payload_rejects_negative",
+          "category": "failure",
+          "expected": "Negative and NaN contributions fail payload validation.",
+          "reference": "Nonnegative finite payload domain."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_c547b77e.marginal_return.v1",
+      "kind": "utility",
+      "purpose": "Marginal private return multiplier/N with stated one-round scope.",
+      "gap_id": "reference_trajectories",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.references:marginal_private_return",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_marginal_private_return_value",
+          "category": "mathematical",
+          "expected": "Marginal return equals 0.4 for multiplier 2 and N=5.",
+          "reference": "Hand arithmetic 2/5 with one-round scope."
+        },
+        {
+          "name": "test_marginal_private_return_rejects_bad_inputs",
+          "category": "failure",
+          "expected": "Nonpositive N and negative/nonfinite multipliers are rejected.",
+          "reference": "Positive group size and finite nonnegative multiplier."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_c547b77e.zero_reference.v1",
+      "kind": "utility",
+      "purpose": "Self-interested zero-contribution trajectory for the known finite-horizon textbook setting.",
+      "gap_id": "reference_trajectories",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.references:zero_contribution_trajectory",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_zero_trajectory_hand_values",
+          "category": "mathematical",
+          "expected": "Ten-round zero trajectory ends at 100 per participant and 500 group wealth.",
+          "reference": "Hand arithmetic: 20 per endowed round, 0 after."
+        },
+        {
+          "name": "test_zero_trajectory_varied_params",
+          "category": "mathematical",
+          "expected": "A 4-round N=3 case ends at 20/60 with a never-endowed zero case.",
+          "reference": "Hand arithmetic with shortened horizon."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_c547b77e.cooperative_reference.v1",
+      "kind": "utility",
+      "purpose": "Full-reinvestment group-wealth trajectory as the cooperative reference for multiplier>1.",
+      "gap_id": "reference_trajectories",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.references:full_reinvestment_trajectory",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_full_reinvestment_hand_values",
+          "category": "mathematical",
+          "expected": "Full reinvestment ends at 39680 per participant and 198400 group wealth.",
+          "reference": "Hand arithmetic: closing doubles available funds each round."
+        },
+        {
+          "name": "test_full_reinvestment_neutral_multiplier",
+          "category": "mathematical",
+          "expected": "With multiplier 1 the trajectory equals cumulative endowments.",
+          "reference": "Hand arithmetic: no wealth creation at multiplier 1."
+        },
+        {
+          "name": "test_full_reinvestment_rejects_bad_inputs",
+          "category": "failure",
+          "expected": "Bad horizons, negative funds and nonpositive N are rejected.",
+          "reference": "Finite horizon and nonnegative parameter domain."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [
+    "pydantic"
+  ],
+  "repair_counts": {},
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "preview_generator": "experiment_extension.report:preview",
+    "generator": "experiment_extension.report:report"
+  },
+  "verification": null
+}

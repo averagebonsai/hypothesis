@@ -7,7 +7,7 @@ from pydantic import Field, model_validator
 from simulation_core.types import FrozenModel, SimulationConfig
 
 from .jobs import ToolInvocation
-from .specs import BundleManifest, RunReceipt
+from .specs import BundleManifest, ReportReceipt, RunReceipt
 
 
 class SourceFile(FrozenModel):
@@ -38,6 +38,17 @@ class CodingPlan(FrozenModel):
 class Implementation(FrozenModel):
     summary: str = Field(min_length=1, max_length=3000)
     files: tuple[SourceFile, ...] = Field(min_length=1, max_length=40)
+
+
+class NotebookReview(FrozenModel):
+    approved: bool
+    issues: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def consistent_review(self) -> Self:
+        if self.approved == bool(self.issues):
+            raise ValueError("Approve only when there are no outstanding issues")
+        return self
 
 
 class ReviewRequest(FrozenModel):
@@ -73,9 +84,18 @@ class AuthoringOutcome(FrozenModel):
     receipt: RunReceipt | None = None
     review: ReviewRequest | None = None
     candidate: str | None = None
+    report_receipt: ReportReceipt | None = None
+    report_candidate: str | None = None
+    report_output: str | None = None
 
     @model_validator(mode="after")
     def consistent_status(self) -> Self:
+        if self.report_receipt is not None and (
+            not self.report_receipt.response.passed
+            or self.report_candidate is None
+            or self.report_output is None
+        ):
+            raise ValueError("A revised report requires validated report provenance")
         if self.status == "completed":
             if (
                 self.review is not None

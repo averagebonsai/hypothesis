@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import Field, JsonValue, field_validator
 
+from .behavior import ActorBehaviorSpec
 from .problems import ProblemStatement
 from .provenance import pointer_tokens
 from .types import FrozenModel
@@ -31,4 +32,5 @@ class ExperimentRequest(FrozenModel):
     problem: ProblemStatement | None = None
     supplied_inputs: tuple[SuppliedInput, ...] = ()
     requirements: tuple[str, ...] = ()
+    actor_behaviors: tuple[ActorBehaviorSpec, ...] = ()
     # No automatic assumption generation or component selection occurs in this DTO.

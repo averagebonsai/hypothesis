@@ -1,0 +1,16 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "ac9ecfe34c90c5755ddb886ee93ccdb9ff086f40e86341c713671e152fe454e7",
+    "experiment_extension/__init__.py": "445f1cb2e19c232f1767b13ba1bc85ef640b8e6056c21863d558a98e4542ba17",
+    "experiment_extension/mechanism.py": "1d0f64e3276557ede581d7a65d7f1df19fd7f79b530ea2cc95c04a03920cba8d",
+    "experiment_extension/references.py": "db56a0246dcdc3df313b6deeed81981199a6f290daa4a721238ccef8746e25c3",
+    "experiment_extension/report.py": "c74c221e7974a9c627b4c9eb0c47fa8b6e7d48a2e4fa0102a96806e013f19825",
+    "experiment_extension/schemas.py": "65964b25570ae432e9dc2dc827910b8db74df13d7bad5209df250aad5f3b1f8a",
+    "job.example.json": "4d6cf72c840da1f8083fe8982edf82a6b0664599f6e67dab589c655791ac8eac",
+    "tests/test_mechanism.py": "508680958db40324fa6929b6269d4e77d454458318adb63412001f122cc6b0ab",
+    "tests/test_references.py": "000d58b68a164d7771cacac6a5dafd3d9f5afb3c78cab326d39c94fc2649a766",
+    "tests/test_reporting.py": "e528511c063a32bbc3f76a82849f27351f622cb5863de23713dbfcd4603ae54f"
+  },
+  "digest": "cdfb31154b77434e3ea6c25841566c653d902252d5a83f35f5d18a0214ffae56"
+}

@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import time
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -15,10 +16,13 @@ from .contracts import (
     CodingPlan,
     Implementation,
     ImplementationResponse,
+    NotebookReview,
     PlanningResponse,
     ReviewRequest,
     SourceFile,
 )
+from .execution_settings import ActorExecutionSettings
+from .guide import interface_guide
 from .inventory import inventory
 from .jobs import ToolJobManifest
 from .planning import review_plan
@@ -41,6 +45,8 @@ SOURCE_FILES = tuple(
         "execution",
         "observation",
         "model_gateway",
+        "behavior",
+        "checkpoint",
     )
 ) + (
     "src/agent_tools/specs.py",
@@ -51,6 +57,9 @@ SOURCE_FILES = tuple(
     "src/agent_tools/planning.py",
     "src/agent_tools/verification.py",
     "src/simulation_core/reporting.py",
+    "src/simulation_core/reports.py",
+    "src/agent_tools/guide.py",
+    "src/agent_tools/execution_settings.py",
     "src/components/library.py",
     "src/components/policies/scripted.py",
     "src/components/policies/llm.py",
@@ -115,7 +124,7 @@ def build_context(project: Path) -> dict[str, object]:
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             }
         )
-    return {"sources": sources, "inventory": inventory()}
+    return {"sources": sources, "inventory": inventory(), "interface_guide": interface_guide()}
 
 
 class CodingAgent:
@@ -129,11 +138,15 @@ class CodingAgent:
         resume: bool = False,
         max_calls: int | None = None,
         reasoning_effort: str = "max",
-        max_output_tokens: int = 32000,
+        max_output_tokens: int | None = None,
         instructions_path: Path | None = None,
+        execution_settings: ActorExecutionSettings | None = None,
+        content_review: bool = False,
         access_description: str = "Explicit API payload only; no filesystem, shell, web, retrieval, or code-execution tools supplied",
     ) -> None:
         self.reasoning_effort = reasoning_effort
+        self.execution_settings = execution_settings
+        self.content_review = content_review
         self.max_output_tokens = max_output_tokens
         self.project = project.resolve()
         self.gateway = BoundedGateway(
@@ -153,7 +166,11 @@ class CodingAgent:
         manifest = {
             "model": self.model,
             "reasoning_effort": self.reasoning_effort,
+            "actor_execution": None
+            if execution_settings is None
+            else execution_settings.model_dump(mode="json"),
             "authoring_contract_version": 2,
+            "content_review": content_review,
             "source_files": [
                 {"path": source["path"], "sha256": source["sha256"]} for source in sources
             ],
@@ -195,9 +212,12 @@ class CodingAgent:
         *,
         resume: bool = False,
         max_calls: int | None = None,
-        max_output_tokens: int = 32000,
+        max_output_tokens: int | None = None,
         backend: str = "muse",
         sandbox: str | None = None,
+        actor_max_output_tokens: int | None = None,
+        actor_max_total_calls: int = 48,
+        actor_settings: ActorExecutionSettings | None = None,
     ) -> "CodingAgent":
         if backend == "muse":
             from components.gateways.settings import LiveModelSettings
@@ -205,20 +225,33 @@ class CodingAgent:
             from .muse import MuseCodeGateway
 
             settings = LiveModelSettings.load(role="coding", env_file=project / ".env")
+            actors = LiveModelSettings.load(role="actor", env_file=project / ".env")
+            if actor_settings is not None and actor_settings.model != actors.model:
+                raise ValueError("Actor settings must use the MODEL selected in the environment")
             return cls(
                 project,
-                MuseCodeGateway(project, audit / "muse", settings.api_key, sandbox=sandbox),
+                MuseCodeGateway(
+                    project, audit / "muse", settings.api_key, sandbox=sandbox, resume=resume
+                ),
                 settings.model,
                 audit,
                 resume=resume,
                 max_calls=max_calls,
                 max_output_tokens=max_output_tokens,
+                execution_settings=actor_settings
+                or ActorExecutionSettings(
+                    model=actors.model,
+                    max_output_tokens=actor_max_output_tokens,
+                    max_total_calls=actor_max_total_calls,
+                ),
+                content_review=True,
                 instructions_path=project / "prompts/muse_coding_agent.md",
-                access_description="Muse Code filesystem and command tools inside a fresh Docker container; trusted toolkit read-only; no host workspace, history, or past experiments",
+                access_description="Muse Code filesystem and command tools in one persistent experiment-local session/container; trusted toolkit read-only; no host workspace or past experiments",
             )
         if backend != "api":
             raise ValueError("Coding backend must be muse or api")
         from components.gateways.live import configured_coding_gateway
+        from components.gateways.settings import LiveModelSettings
 
         model, gateway = configured_coding_gateway(env_file=project / ".env")
         return cls(
@@ -229,6 +262,11 @@ class CodingAgent:
             resume=resume,
             max_calls=max_calls,
             max_output_tokens=max_output_tokens,
+            execution_settings=actor_settings
+            or ActorExecutionSettings(
+                model=LiveModelSettings.load(role="actor", env_file=project / ".env").model,
+                max_output_tokens=actor_max_output_tokens,
+            ),
         )
 
     def call[T: FrozenModel](self, task: dict[str, object], output: type[T]) -> T:
@@ -240,15 +278,73 @@ class CodingAgent:
             model=self.model,
             reasoning_effort=self.reasoning_effort,
             instructions=self.instructions,
-            input_json=json.dumps({**task, "toolkit": self.context}),
+            input_json=json.dumps(
+                {
+                    **task,
+                    "toolkit": self.context,
+                    **(
+                        {"execution_capabilities": self.execution_settings.capabilities()}
+                        if self.execution_settings
+                        else {}
+                    ),
+                }
+            ),
             response_schema=output.model_json_schema(),
             response_strict=False,
             max_output_tokens=self.max_output_tokens,
         )
         private_json(self.audit / f"request-{index}.json", request.model_dump(mode="json"))
-        response = self.gateway.complete(request)
+        started = time.monotonic()
+        succeeded = False
+        try:
+            response = self.gateway.complete(request)
+            succeeded = True
+        finally:
+            private_json(
+                self.audit / f"stage-timing-{index}.json",
+                {
+                    "stage": task.get("stage", "unknown"),
+                    "elapsed_seconds": time.monotonic() - started,
+                    "provider_completed": succeeded,
+                },
+            )
         private_json(self.audit / f"response-{index}.json", response.model_dump(mode="json"))
         return output.model_validate_json(response.text)
+
+    def close(self) -> None:
+        """Release an experiment's authoring resources after all stages are finished."""
+        close = getattr(self.gateway.gateway, "close", None)
+        if close is not None:
+            close()
+
+    def review_notebook(
+        self,
+        request: ExperimentRequest,
+        plan: CodingPlan,
+        implementation: Implementation,
+        content: str,
+        *,
+        observed: bool,
+    ) -> NotebookReview:
+        notebook = json.loads(content)
+        # Include text/metadata and figure descriptions, not redundant base64 images.
+        for cell in notebook["cells"]:
+            cell["outputs"] = [
+                output
+                for output in cell.get("outputs", [])
+                if "image/png" not in output.get("data", {})
+            ]
+        return self.call(
+            {
+                "stage": "review_notebook",
+                "request": request.model_dump(mode="json"),
+                "frozen_plan": plan.model_dump(mode="json"),
+                "previous_implementation": implementation.model_dump(mode="json"),
+                "notebook": notebook,
+                "observed": observed,
+            },
+            NotebookReview,
+        )
 
     def plan(
         self,
@@ -274,6 +370,14 @@ class CodingAgent:
         if not isinstance(result, CodingPlan):
             raise TypeError("Expected a coding plan")
         result = result.model_copy(update={"tests": self._normalize(result.tests, "plan")})
+        if self.execution_settings is not None and result.simulation is not None:
+            result = result.model_copy(
+                update={"simulation": self.execution_settings.resolve(result.simulation)}
+            )
+            private_json(
+                self.audit / f"execution-settings-{self.gateway.calls}.json",
+                self.execution_settings.model_dump(mode="json"),
+            )
         issues = review_plan(self.project, request, experiment_id, result)
         private_json(self.audit / f"plan-review-{self.gateway.calls}.json", {"issues": issues})
         if issues:

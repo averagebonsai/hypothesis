@@ -1,0 +1,436 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "auction_notebook_141f20fc",
+  "version": "v2",
+  "gap_analysis": {
+    "objective": "Compare live LLM bidding in a one-round sealed-bid second-price auction against the hand-derived truthful-bidding reference and report the comparison in an explanatory notebook.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "simultaneous_round",
+          "description": "One simultaneous sealed-bid round with exactly one scalar bid per bidder and joint commitment.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "exactly one action per bidder",
+            "joint batch commitment"
+          ]
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "RoundParameters with rounds=1 schedules all three bidders in one joint phase, requires exactly one action per bidder per batch, and terminates after one tick; the trusted runtime commits the batch jointly.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "llm_bidders",
+          "description": "Live LLM bidder policies emitting one schema-constrained bid plus a recorded rationale from authorized observations.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [],
+          "timing": "simultaneous single round",
+          "evaluation": "unknown",
+          "required_guarantees": [
+            "schema-constrained actions",
+            "recorded rationales"
+          ]
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1"
+        ],
+        "reason": "llm.v1 constrains each actor to its declared bid schema, records model calls with decision rationales, and retries within budget; the host supplies the actor relay and model separately.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "sealed_bid_privacy",
+          "description": "Each bidder observes the auction rules and only its own valuation and memory, never another bidder's private state or uncommitted bid.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "no cross-bidder private visibility",
+            "no pre-commit bid leakage"
+          ]
+        },
+        "disposition": "COMPOSE",
+        "selected_components": [
+          "simultaneous.v1",
+          "llm.v1"
+        ],
+        "reason": "Configured ObservationPermissions (public rules plus each bidder's own valuation fact) are enforced by the trusted observation layer, and simultaneous scheduling commits all bids jointly so no bidder observes another's bid before committing.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "auction_rules",
+          "description": "Sealed-bid second-price allocation, payment, and quasi-linear utilities with legal nontruthful bids.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "finite nonnegative bids",
+            "second-price settlement",
+            "configuration-order tie-break"
+          ],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "highest bid wins",
+            "winner pays second-highest bid",
+            "quasi-linear payoffs"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No stocked mechanism implements Vickrey settlement over private valuations with a configuration-order tie-break; recording.v1 stores actions without payoffs and the pricing mechanisms use different market rules.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "bid_payload",
+          "description": "Bid action payload carrying one finite nonnegative amount.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [
+            "finite",
+            "nonnegative"
+          ],
+          "timing": "simultaneous single round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "number.v1 lacks nonnegativity and price.v1/quantity.v1 name different domain concepts with structurally unequal schemas; a dedicated bid schema keeps the payload semantics exact.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "truthful_reference",
+          "description": "Post-commit truthful-bidding reference computed from private valuations after LLM decisions are committed.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "bidder_a": 1,
+            "bidder_b": 1,
+            "bidder_c": 1
+          },
+          "constraints": [],
+          "timing": "after commitment",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "bids equal valuations",
+            "no equilibrium claim"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No stocked solver produces the required Vickrey truthful-bidding point reference, and the user explicitly says a new equilibrium solver is not required; a plain post-commit calculator avoids false equilibrium certification.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "auction_verification",
+          "description": "Custom verification of allocation, payment, utilities, ties, and bid legality on recorded runs.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "after commitment",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "independent recomputation",
+            "tamper detection"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "The piecewise auction settlement (allocation, second price, tie-break, quasi-linear payoffs) cannot use the generic numeric expression bindings, and no structured problem is supplied; a VerificationCheck subclass recomputes the settlement independently from recorded runs.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "results_notebook",
+          "description": "Executed results notebook comparing actual bids, winners, payments, and payoffs against the truthful reference with recorded rationales and assumptions.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "after commitment",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "values derived from saved run",
+            "rationales shown once"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "The shared explanatory.v1 writer renders the report, but the auction comparison (recorded bids versus valuations and the truthful reference, with figures and rationales) needs an experiment-specific generator and external report-data helpers.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.auction_notebook_141f20fc.second_price",
+      "kind": "mechanism",
+      "purpose": "Settle one simultaneous sealed-bid second-price round: validate finite nonnegative bids, award the item to the highest bidder under the configuration-order tie-break, charge the second-highest bid, and record quasi-linear payoffs.",
+      "gap_id": "auction_rules",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.auction:SecondPriceAuctionMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_settles_second_price",
+          "category": "functional",
+          "expected": "Bids 80/70/40 with valuations 90/65/40 yield winner bidder_a, payment 70, and payoffs 20/0/0 with matching metrics and public history.",
+          "reference": "Hand-derived Vickrey settlement from the user's auction rules."
+        },
+        {
+          "name": "test_mechanism_breaks_ties_by_configuration_order",
+          "category": "functional",
+          "expected": "Highest-bid ties go to the earliest bidder in configuration order and the winner pays the tied top bid.",
+          "reference": "User's configuration-order tie-break convention."
+        },
+        {
+          "name": "test_mechanism_accepts_nontruthful_bids",
+          "category": "functional",
+          "expected": "Bids above or below valuation are accepted, including an overbidding winner with negative utility.",
+          "reference": "User's rule that strategically poor bids remain legal."
+        },
+        {
+          "name": "test_mechanism_rejects_illegal_bids",
+          "category": "failure",
+          "expected": "Negative, non-numeric, missing, or misshapen bids, wrong kinds, unknown actors, and incomplete batches raise ValueError; integer and zero bids pass.",
+          "reference": "User's finite-nonnegative bid legality rule."
+        },
+        {
+          "name": "test_mechanism_rejects_bad_configurations",
+          "category": "failure",
+          "expected": "Missing valuations, unsupported tie-break values, and single-bidder worlds are rejected at configuration validation.",
+          "reference": "Declared mechanism prerequisites; only implemented options are accepted."
+        },
+        {
+          "name": "test_mechanism_records_public_history",
+          "category": "functional",
+          "expected": "Each transition appends one bids batch and one outcome record; state validation enforces one record per committed tick.",
+          "reference": "Recording-style public history checked against hand-built states."
+        },
+        {
+          "name": "test_sealed_bid_privacy_hides_others",
+          "category": "functional",
+          "expected": "Each bidder observes only the rules plus their own valuation, with no other bidder's identity or valuation present.",
+          "reference": "Trusted observation layer applied to the planned permissions."
+        },
+        {
+          "name": "test_simulation_completes_single_simultaneous_round",
+          "category": "integration",
+          "expected": "The trusted runtime completes exactly one simultaneous round with hand-derived payoffs, metrics, history, and rationales.",
+          "reference": "Hand-derived settlement executed through the real runtime with scripted test policies."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_notebook_141f20fc.bid",
+      "kind": "action_schema",
+      "purpose": "BidPayload model for the submit_bid action: one finite nonnegative bid amount.",
+      "gap_id": "bid_payload",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:BidPayload",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_bid_payload_accepts_finite_nonnegative",
+          "category": "interface",
+          "expected": "Integer, zero, and positive bids validate to floats, including strict JSON transport.",
+          "reference": "User's finite-nonnegative bid domain."
+        },
+        {
+          "name": "test_bid_payload_rejects_invalid",
+          "category": "failure",
+          "expected": "Negative, null, missing, extra-field, non-numeric, and nonfinite bids are rejected.",
+          "reference": "Strict payload schema matching the runtime's strict transport validation."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_notebook_141f20fc.truthful_reference",
+      "kind": "utility",
+      "purpose": "Post-commit truthful-bidding point reference: bids equal valuations with Vickrey winner, payment, and payoffs. A plain calculator, not an equilibrium solver.",
+      "gap_id": "truthful_reference",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.reference:truthful_second_price",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_truthful_reference_matches_hand_derived_values",
+          "category": "mathematical",
+          "expected": "Valuations map to identical truthful bids with hand-derived winner, second-price payment, and payoffs across normal, tied, and upset cases.",
+          "reference": "Hand-computed Vickrey truthful settlements."
+        },
+        {
+          "name": "test_truthful_reference_rejects_bad_inputs",
+          "category": "failure",
+          "expected": "Mismatched actor order, empty or singleton bidder sets, and non-numeric or nonfinite valuations raise ValueError.",
+          "reference": "Declared calculator prerequisites."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_notebook_141f20fc.auction_checks",
+      "kind": "utility",
+      "purpose": "VerificationCheck that independently recomputes allocation, payment, utilities, tie-break, and bid legality from each recorded committed profile.",
+      "gap_id": "auction_verification",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.checks:AuctionSettlementCheck",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_settlement_check_verifies_recorded_run",
+          "category": "functional",
+          "expected": "A genuine recorded run with correct settlement is reported verified with the winner in evidence.",
+          "reference": "Hand-derived settlement on a real runtime artifact."
+        },
+        {
+          "name": "test_settlement_check_fails_on_tampered_payment",
+          "category": "failure",
+          "expected": "Tampered payoffs are reported failed with payment evidence.",
+          "reference": "Corrupted artifact that must not verify."
+        },
+        {
+          "name": "test_settlement_check_fails_on_tampered_winner",
+          "category": "failure",
+          "expected": "A tampered winner metric is reported failed with winner evidence.",
+          "reference": "Corrupted artifact that must not verify."
+        },
+        {
+          "name": "test_settlement_check_fails_on_illegal_bid",
+          "category": "failure",
+          "expected": "A recorded negative bid is reported failed with bid evidence.",
+          "reference": "User's bid legality rule applied to recorded actions."
+        },
+        {
+          "name": "test_settlement_check_fails_without_committed_profile",
+          "category": "failure",
+          "expected": "A run with no committed profile is reported failed.",
+          "reference": "Declared check applicability: nothing to verify."
+        }
+      ]
+    },
+    {
+      "id": "experimental.auction_notebook_141f20fc.auction_notebook",
+      "kind": "utility",
+      "purpose": "Explanatory.v1 notebook generator comparing recorded LLM bids with valuations and the truthful reference, with figures and recorded rationales.",
+      "gap_id": "results_notebook",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.report:generate_auction_notebook",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [
+        "experimental.auction_notebook_141f20fc.truthful_reference"
+      ],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_notebook_reports_hand_derived_comparison",
+          "category": "integration",
+          "expected": "The generator writes results.ipynb with the five explanatory sections, hand-derived truthful reference values, exact bid/valuation/payoff figures, single-display rationales, and a passing structural validation.",
+          "reference": "Hand-derived actual and truthful settlements plus the shared explanatory validator."
+        },
+        {
+          "name": "test_notebook_derives_from_saved_run",
+          "category": "integration",
+          "expected": "A second fixture with tied bids and a negative payoff is reported with exactly its own derived numbers, proving no hardcoding.",
+          "reference": "Hand-derived tied settlement distinct from the first fixture."
+        },
+        {
+          "name": "test_notebook_requires_committed_decisions",
+          "category": "failure",
+          "expected": "Generation without any committed decision raises ValueError.",
+          "reference": "Declared generator prerequisite."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [],
+  "repair_counts": {
+    "implementation_validation": 1
+  },
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "generator": "experiment_extension.report:generate_auction_notebook"
+  },
+  "verification": {
+    "variables": [],
+    "objectives": [],
+    "independent_reference": "none",
+    "tolerance": 1e-6,
+    "reference_cases": [],
+    "action_behavior": "custom",
+    "parameter_cases": [],
+    "custom_checks": [
+      {
+        "id": "auction_settlement",
+        "symbol": "experiment_extension.checks:AuctionSettlementCheck",
+        "required": true,
+        "purpose": "Independently recompute winner, second-price payment, quasi-linear payoffs, configuration-order tie-break, and bid legality for every recorded committed profile."
+      }
+    ]
+  }
+}

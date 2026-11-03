@@ -8,8 +8,10 @@ import json
 import os
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from threading import Lock
 from typing import cast, get_args
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
@@ -27,7 +29,7 @@ from simulation_core.protocol import ProtocolRules
 from simulation_core.registry import ComponentRegistry
 from simulation_core.solver import GameView, Solver
 
-from .actor_relay import ENV, RelayGateway, serve
+from .actor_relay import RelayGateway, serve
 from .diagnostics import read as read_diagnostic
 from .verification import assess
 
@@ -68,7 +70,9 @@ def load_registry(root: Path) -> tuple[BundleManifest, ComponentRegistry]:
                 f"Dependency requires approval and a new trusted lock/image: {dependency}"
             )
         importlib.metadata.version(dependency)
-    registry = standard_registry(RelayGateway() if os.environ.get(ENV) else None)
+    # Construction/preflight needs the policy interface, not a live connection.
+    # Only the primary run opens a relay; tests and reports cannot call actors.
+    registry = standard_registry(RelayGateway())
     # Trusted core imports above precede the experimental import path.
     sys.path.append(str(root))
     for component in manifest.components:
@@ -126,12 +130,30 @@ def resolved_schemas(
 
 
 def _check(name: str, command: list[str], *, seconds: int = 90) -> CheckResult:
+    _progress(name, "started")
+    start = time.monotonic()
     result = bounded_command(command, seconds=seconds, max_bytes=300_000)
+    _progress(name, "passed" if result.code == 0 else "failed", time.monotonic() - start)
     return CheckResult(
         name=name,
         passed=result.code == 0,
         exit_code=result.code,
         output=(result.stdout + result.stderr)[-100_000:],
+    )
+
+
+def _progress(stage: str, status: str, elapsed: float | None = None) -> None:
+    print(
+        "HYPOTHESIS_WORKER_PROGRESS:"
+        + json.dumps(
+            {
+                "stage": stage,
+                "status": status,
+                "elapsed_seconds": elapsed,
+            }
+        ),
+        file=sys.stderr,
+        flush=True,
     )
 
 
@@ -261,8 +283,55 @@ def execute(operation: str, expected_digest: str) -> WorkerResponse:
         return WorkerResponse(
             bundle_digest=seal.digest, checks=tuple(checks), resolved_schemas=schemas
         )
-    artifact = JobRunner(LocalBackend(registry)).run(job.request, job.simulation)
+    _progress("simulation", "started")
+    from simulation_core.checkpoint import RuntimeCheckpoint, RuntimeOptions
+
+    checkpoint_path = Path("/job/checkpoint.json")
+    runtime_path = Path("/job/runtime.json")
+    runtime = json.loads(runtime_path.read_text()) if runtime_path.exists() else {}
+
+    emission_lock = Lock()
+    emitted_events = 0
+
+    def emit(prefix: str, payload: str) -> None:
+        with emission_lock:
+            print(prefix + payload, file=sys.stderr, flush=True)
+
+    def checkpoint(snapshot: RuntimeCheckpoint) -> None:
+        nonlocal emitted_events
+        payload = snapshot.model_dump(mode="json")
+        payload["event_count"] = len(snapshot.events)
+        payload["events"] = payload["events"][emitted_events:]
+        emit("HYPOTHESIS_CHECKPOINT:", json.dumps(payload))
+        emitted_events = len(snapshot.events)
+
+    def timing(value: dict[str, str | int | float]) -> None:
+        emit("HYPOTHESIS_TIMING:", json.dumps(value))
+
+    options = RuntimeOptions(
+        max_concurrency=runtime.get("max_concurrency", 1),
+        checkpoint=RuntimeCheckpoint.model_validate_json(checkpoint_path.read_text())
+        if checkpoint_path.exists()
+        else None,
+        on_checkpoint=checkpoint,
+        on_timing=timing,
+    )
+    with serve(
+        os.environ.get("HYPOTHESIS_ENABLE_ACTORS") == "1", output=sys.__stdout__ or sys.stdout
+    ):
+        artifact = JobRunner(LocalBackend(registry, options)).run(job.request, job.simulation)
+    _progress("simulation", "completed")
+    from simulation_core.logging import replay
+
+    if replay(artifact.result.events)[-1] != artifact.result.final_state:
+        raise ValueError("Committed event replay does not reconstruct final state")
+    actors = {actor.id for actor in job.simulation.world.actors}
+    if any(set(event.state.private) != actors for event in artifact.result.events):
+        raise ValueError("Recorded private state does not cover configured actors")
     findings = assess(artifact, manifest, registry)
+    from .diagnostics import record
+
+    record(artifact, findings)
     if any(finding.required and finding.status != "verified" for finding in findings):
         from .diagnostics import record
 
@@ -277,7 +346,9 @@ def execute(operation: str, expected_digest: str) -> WorkerResponse:
     if manifest.notebook is not None:
         from .reporting import execute_report
 
+        _progress("report", "started")
         notebook_json = execute_report(artifact, manifest.notebook)
+        _progress("report", "completed")
     probe_results = []
     probes_path = Path("/job/probes.json")
     if probes_path.exists():
@@ -306,10 +377,7 @@ def main() -> None:
     require_container()
     # Ordinary experimental print output cannot contaminate the structured response.
     try:
-        with (
-            serve(os.environ.get("HYPOTHESIS_ENABLE_ACTORS") == "1"),
-            contextlib.redirect_stdout(sys.stderr),
-        ):
+        with contextlib.redirect_stdout(sys.stderr):
             response = execute(sys.argv[1], sys.argv[2])
     except Exception as exc:  # noqa: BLE001 - structured diagnostics at the isolated process boundary
         response = WorkerResponse(

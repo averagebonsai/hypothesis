@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from threading import Lock
 from typing import Literal
 
 from pydantic import Field, JsonValue
@@ -11,13 +12,15 @@ from .types import FrozenModel
 
 class ModelRequest(FrozenModel):
     actor_id: str
+    # Transport identity only; adapters must not include this in the actor's input.
+    decision_id: str | None = None
     model: str = Field(min_length=1)
     reasoning_effort: str | None = None
     instructions: str
     input_json: str
     response_schema: dict[str, JsonValue]
     response_strict: bool = True
-    max_output_tokens: int = Field(gt=0)
+    max_output_tokens: int | None = Field(default=None, gt=0)
 
 
 class ModelResponse(FrozenModel):
@@ -26,6 +29,7 @@ class ModelResponse(FrozenModel):
     request_id: str | None = None
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
+    recorded_request: dict[str, JsonValue] | None = None
 
 
 class GatewayError(RuntimeError):
@@ -38,11 +42,13 @@ class GatewayError(RuntimeError):
         request_id: str | None = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        recorded_request: dict[str, JsonValue] | None = None,
     ) -> None:
         super().__init__(category)
         self.request_id = request_id
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
+        self.recorded_request = recorded_request
 
 
 class ModelGateway(ABC):
@@ -61,13 +67,15 @@ class BoundedGateway(ModelGateway):
         self,
         gateway: ModelGateway,
         max_calls: int | None = 8,
-        max_output_tokens_per_call: int = 1200,
+        max_output_tokens_per_call: int | None = None,
         max_request_chars: int = 100000,
         max_response_chars: int = 20000,
     ) -> None:
-        if (max_calls is not None and max_calls <= 0) or min(
-            max_output_tokens_per_call, max_request_chars, max_response_chars
-        ) <= 0:
+        if (
+            (max_calls is not None and max_calls <= 0)
+            or (max_output_tokens_per_call is not None and max_output_tokens_per_call <= 0)
+            or min(max_request_chars, max_response_chars) <= 0
+        ):
             raise ValueError("Gateway budgets must be positive")
         self.gateway = gateway
         self.max_calls = max_calls
@@ -75,19 +83,24 @@ class BoundedGateway(ModelGateway):
         self.max_request_chars = max_request_chars
         self.max_response_chars = max_response_chars
         self.calls = 0
+        self._lock = Lock()
 
     @property
     def mode(self) -> Literal["fake", "live"]:
         return self.gateway.mode
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        if self.max_calls is not None and self.calls >= self.max_calls:
-            raise GatewayError("call_budget_exhausted")
-        if request.max_output_tokens > self.max_output_tokens_per_call:
+        if self.max_output_tokens_per_call is not None and (
+            request.max_output_tokens is None
+            or request.max_output_tokens > self.max_output_tokens_per_call
+        ):
             raise GatewayError("output_budget_exceeded")
         if len(request.model_dump_json()) > self.max_request_chars:
             raise GatewayError("request_too_large")
-        self.calls += 1
+        with self._lock:
+            if self.max_calls is not None and self.calls >= self.max_calls:
+                raise GatewayError("call_budget_exhausted")
+            self.calls += 1
         response = self.gateway.complete(request.model_copy(deep=True))
         if len(response.text) > self.max_response_chars:
             raise GatewayError("response_too_large")

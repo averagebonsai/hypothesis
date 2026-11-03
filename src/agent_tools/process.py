@@ -5,6 +5,7 @@ import selectors
 import subprocess
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 
 
@@ -26,7 +27,12 @@ def bounded_command(
     max_bytes: int,
     exchange: Callable[[str], str | None] | None = None,
     input_text: str | None = None,
+    exchange_workers: int = 1,
+    on_tick: Callable[[], None] | None = None,
+    on_stderr_line: Callable[[str], None] | None = None,
 ) -> ProcessResult:
+    pool = ThreadPoolExecutor(max_workers=exchange_workers)
+    futures: dict[Future[str | None], bytes] = {}
     process = subprocess.Popen(
         args,
         stdout=subprocess.PIPE,
@@ -38,6 +44,7 @@ def bounded_command(
     deadline = time.monotonic() + seconds
     total = 0
     pending = bytearray()
+    pending_errors = bytearray()
     try:
         if input_text is not None:
             assert process.stdin is not None
@@ -47,7 +54,20 @@ def bounded_command(
             if pipe is None:
                 raise RuntimeError("Missing subprocess pipe")
             selector.register(pipe, selectors.EVENT_READ, name)
-        while selector.get_map():
+        while selector.get_map() or futures:
+            for future in tuple(futures):
+                if not future.done():
+                    continue
+                completed_line = futures.pop(future)
+                reply = future.result()
+                if reply is None:
+                    buffers["stdout"].extend(completed_line + b"\n")
+                else:
+                    assert process.stdin is not None
+                    process.stdin.write((reply + "\n").encode())
+                    process.stdin.flush()
+            if on_tick is not None:
+                on_tick()
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ProcessLimitError("Worker command exceeded its wall-clock budget")
@@ -59,18 +79,19 @@ def bounded_command(
                 total += len(data)
                 if total > max_bytes:
                     raise ProcessLimitError("Worker command exceeded its output budget")
+                if key.data == "stderr" and on_stderr_line is not None:
+                    pending_errors.extend(data)
+                    while b"\n" in pending_errors:
+                        line, _, rest = pending_errors.partition(b"\n")
+                        pending_errors = bytearray(rest)
+                        on_stderr_line(line.decode("utf-8", errors="replace"))
                 if key.data == "stdout" and exchange is not None:
                     pending.extend(data)
                     while b"\n" in pending:
                         line, _, rest = pending.partition(b"\n")
                         pending = bytearray(rest)
-                        reply = exchange(line.decode("utf-8"))
-                        if reply is None:
-                            buffers["stdout"].extend(line + b"\n")
-                        else:
-                            assert process.stdin is not None
-                            process.stdin.write((reply + "\n").encode())
-                            process.stdin.flush()
+                        # Keep draining output/deadlines while provider requests are in flight.
+                        futures[pool.submit(exchange, line.decode("utf-8"))] = bytes(line)
                 else:
                     buffers[key.data].extend(data)
         buffers["stdout"].extend(pending)
@@ -80,6 +101,7 @@ def bounded_command(
             *(buffers[name].decode("utf-8", errors="replace") for name in ("stdout", "stderr")),
         )
     finally:
+        pool.shutdown(wait=False, cancel_futures=True)
         selector.close()
         if process.poll() is None:
             process.kill()

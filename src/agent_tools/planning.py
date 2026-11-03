@@ -158,6 +158,12 @@ def review_plan(
         issues.append("Resolve critical unknowns/unsupported requirements before freezing")
     if manifest.notebook is None:
         issues.append("Declare a notebook generator for the results report")
+    elif manifest.notebook.report_version != "explanatory.v1":
+        issues.append("New simulation plans require NotebookSpec.report_version=explanatory.v1")
+    if manifest.notebook is not None and manifest.notebook.preview_generator is None:
+        issues.append(
+            "New simulation plans require an offline preview_generator (JobManifest, Path) -> Path"
+        )
     known = inventory()
     registry = standard_registry()
     selections = [

@@ -34,8 +34,10 @@ The CLI runs `muse exec --model ... --reasoning-effort max --contributor-mode of
 --json`. No `--max-model-steps` cap is passed. Each authoring stage has a bounded
 wall time and output size; it can contain many CLI-managed model/tool calls.
 Controller call counts therefore count **authoring stages**, not provider calls.
-The CLI event trace is retained; the generic ModelResponse's zero token defaults
-mean unavailable usage here, not a claim of zero cost.
+Native usage is aggregated per run (without double-counting cumulative updates)
+and propagated into ModelResponse token fields. `usage.json` retains provider-call,
+cache and reasoning counters plus availability and scope. Unknown usage is not
+a claim of zero cost.
 
 Muse Code is an authenticated client. Using the CLI with an API key still makes
 provider calls and uses API-key billing; the difference is that Muse manages the
@@ -44,11 +46,13 @@ response per stage.
 
 ## Isolation and credentials
 
-Each authoring stage gets a new container, temporary home and workspace. Only the
-current task/schema/instructions are mounted read-only. Toolkit code is installed
-read-only and inspected on demand. Framework regression fixtures are removed
-from the authoring image. No previous experiment directories, host home, `.env`,
-Git history, Docker socket or previous Muse sessions are mounted.
+One experiment gets one persistent authoring container, workspace, private Muse
+home and session UUID. Planning, implementation and repairs append to that session
+using `muse exec --session-id`. Current-trial conversation, discoveries, prototypes
+and notes survive stage changes. Controller inputs and frozen tests are mounted
+read-only; offline validation remains separate. No host checkout, `.env`, user home,
+Git history, Docker socket or another experiment's Muse home/workspace is mounted.
+See [lifecycle and explicit resume/cleanup](authoring_workflow.md#continuity-and-frozen-tests).
 
 The API key is delivered once over stdin to the trusted container entrypoint,
 then passed through the CLI’s `--api-key-stdin` option. It is absent from image
@@ -93,3 +97,35 @@ Repairs receive only the current trial's prior artifacts and failed checks.
 Audits live under `experimental_components/_authoring/<id>/muse/`, including the
 pinned image, actual CLI instructions hash and redacted JSONL events. Source bundles
 and completed notebooks/results retain the existing versioning/export conventions.
+
+## Reporting and observability updates
+
+New simulation plans require the [explanatory report contract](explanatory_notebooks.md).
+The coding prompt remains general; experiment facts live only in the current request.
+The CLI reads current execution capabilities separately from scientific inputs.
+
+Each stage retains incremental `native-events.jsonl`, readable `progress.jsonl`,
+`usage.json` and a concise event/exit summary. Console output summarizes tool
+descriptions, failures, retries, elapsed time and a heartbeat while waiting; it
+does not print each token/lifecycle event. Validation reports its check stages.
+
+The new coding agent authors acceptance tests during the current trial's planning
+stage. The controller freezes those files before implementation and materializes
+them under read-only `/inputs/frozen_tests/tests`. These are not tests from an
+earlier experiment. A repair retains the current workspace and overlays that trial's
+returned/normalized implementation files. No other experiment, old result or old session is
+staged. This reduces reconstruction without sharing historical state. Because the
+same agent authors both tests and implementation, passing these tests is correlated
+evidence, not independent proof; separately maintained toolkit checks retain their
+own scope and limitations.
+
+On terminal failure, the controller first stops the coding container, then uses a
+separate offline, resource-bounded reader to salvage allowed source/draft files as
+`partial_workspace.json`, explicitly unapproved. Native events and sanitized failure
+metadata survive time/output limits. Symlinks, oversized files and literal
+credentials are refused. Salvaged files never count as a completed response.
+
+See [the authoring workflow guide](authoring_workflow.md) for the staged interface
+map/starter, central actor settings, offline problem/theory preview, supported
+`preview`/`report` commands, one primary live execution and completion rule.
+The preview never substitutes synthetic results or a prediction for LLM behavior.

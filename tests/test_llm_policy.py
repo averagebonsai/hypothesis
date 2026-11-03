@@ -188,7 +188,10 @@ def test_openai_transport_mocked_no_live_request(monkeypatch):
         body = json.loads(http_request.data)
         assert body["store"] is False
         assert body["text"]["format"]["strict"] is True
-        assert body["max_output_tokens"] == request.max_output_tokens
+        if request.max_output_tokens is None:
+            assert "max_output_tokens" not in body
+        else:
+            assert body["max_output_tokens"] == request.max_output_tokens
         return io.BytesIO(json.dumps(provider_response(fake_response(request))).encode())
 
     monkeypatch.setattr(openai, "urlopen", fake_urlopen)

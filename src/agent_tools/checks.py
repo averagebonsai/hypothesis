@@ -269,3 +269,60 @@ def standard_checks(
                 )
             )
     return tuple(findings)
+
+
+def verify_llm_observations(artifact: JobResult) -> VerificationFinding:
+    """Verify trusted llm.v1 request identity and permissions against precommit states.
+
+    Custom policies may define different request envelopes; this check does not
+    pretend to validate those protocols. It is independent of economic mechanisms.
+    """
+    import json
+
+    from simulation_core.observation import observe, permissions_for
+    from simulation_core.types import Observation
+
+    config = artifact.manifest.simulation
+    actors = {actor.id: actor for actor in config.world.actors}
+    checked = 0
+    try:
+        flattened = tuple(call for event in artifact.result.events for call in event.model_calls)
+        if flattened != artifact.result.model_calls:
+            raise ValueError("Run model calls differ from the canonical event records")
+        for previous, event in zip(artifact.result.events, artifact.result.events[1:]):
+            expected_actors = {
+                d.action.actor_id
+                for d in event.decisions
+                if actors[d.action.actor_id].policy_id == "llm.v1"
+            }
+            accepted = []
+            for call in event.model_calls:
+                actor = actors[call.actor_id]
+                if actor.policy_id != "llm.v1":
+                    continue
+                if actor.id not in expected_actors:
+                    raise ValueError("Recorded call has no committed actor decision")
+                if call.request.get("actor_id") != actor.id:
+                    raise ValueError("Request identity differs from recorded actor")
+                packet = json.loads(str(call.request["input_json"]))
+                observation = Observation.from_json_values(packet["observation"])
+                if observation.actor_id != actor.id:
+                    raise ValueError("Observation identity differs from recorded actor")
+                expected = observe(
+                    actor, previous.state, permissions_for(config, actor.id, previous.state.phase)
+                )
+                if observation != expected:
+                    raise ValueError("Observation differs from the authorized precommit snapshot")
+                if call.status == "accepted":
+                    accepted.append(actor.id)
+                checked += 1
+            if set(accepted) != expected_actors or len(accepted) != len(expected_actors):
+                raise ValueError("Each llm.v1 decision requires exactly one accepted call")
+    except (ValueError, TypeError, KeyError) as exc:
+        return VerificationFinding(id="llm_observation_privacy", status="failed", evidence=str(exc))
+    return VerificationFinding(
+        id="llm_observation_privacy",
+        status="verified" if checked else "unverified",
+        evidence=f"Checked {checked} llm.v1 requests against canonical precommit observations, including identity, public/private facts and memory",
+        required=bool(checked),
+    )

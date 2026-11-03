@@ -1,0 +1,412 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "How do LLM participants change contributions in a repeated public-goods game when a known per-round endowment is withdrawn, while accumulated balances remain available?",
+    "execution_kind": "agent_simulation",
+    "problem": null,
+    "supplied_inputs": [
+      {
+        "name": "participant count",
+        "value": 5,
+        "target_path": "/world/parameters/participant_count",
+        "source_reference": null
+      },
+      {
+        "name": "total rounds",
+        "value": 10,
+        "target_path": "/world/parameters/rounds",
+        "source_reference": null
+      },
+      {
+        "name": "last endowed round",
+        "value": 5,
+        "target_path": "/world/parameters/endowed_rounds",
+        "source_reference": null
+      },
+      {
+        "name": "early endowment per participant per round",
+        "value": 20.0,
+        "target_path": "/world/parameters/endowment",
+        "source_reference": null
+      },
+      {
+        "name": "public good multiplier",
+        "value": 2.0,
+        "target_path": "/world/parameters/multiplier",
+        "source_reference": null
+      }
+    ],
+    "requirements": [
+      "This is a repeated agent simulation using five live LLM actors, simultaneous.v1, permission-filtered observations, private memory, the event log, and custom mechanism rules only where needed. Use MODEL for actors; Muse Code uses MODEL_CODING at max reasoning.",
+      "There are 10 simultaneous rounds, with one contribution per participant per round. All participants start at zero saved balance. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give zero. The horizon and withdrawal schedule are known by all participants from the outset (user clarification).",
+      "All previous earnings are saved. At the opening of a round, available funds are prior accumulated balance plus that round's endowment. Any finite nonnegative contribution up to those available funds is legal, including above 20 and all saved funds. No borrowing against the current round's future pool payout, no debt, no arbitrary contribution cap of 20, no automatic zero contributions after withdrawal.",
+      "For N participants, round payoff_i = endowment_this_round - contribution_i + multiplier * sum(contributions)/N. Closing saved_balance_i = opening_saved_balance_i + round_payoff_i. Public-good payout occurs only after all participants commit; wealth and payoff must not be confused or double-counted. Configuration and mechanism must support varied N, horizon, withdrawal timing, endowments and multipliers, not just these literal values.",
+      "Participants know the rules and schedule, their own available/saved funds and past public round feedback. As a recorded modeling assumption, reveal each completed round's contributions and payoffs to all; never reveal simultaneous uncommitted decisions or another participant's private memory. Future balances may be inferred from public feedback. Only mechanism transitions change saved funds; policy may update its own memory, not its budget.",
+      "Default textbook objective: risk-neutral maximization of final own accumulated balance over the announced horizon, with no externally imposed social preferences. Give neutral instructions, no prescribed contribution strategy or mathematical reference actions. Each action must include a concise recorded rationale tied to current funds, history, incentives and beliefs about other participants. Do not request hidden internal reasoning.",
+      "Compute separate mathematical reference trajectories with stated assumptions: self-interested zero contribution for the known finite-horizon textbook setting, and full reinvestment as a cooperative group-wealth reference for multiplier > 1. Do not call the cooperative trajectory a Nash equilibrium or predict that LLMs will follow either reference. Explain the marginal private return multiplier/N and its scope, and distinguish one-shot incentive arguments from assumptions for finite-horizon backward induction.",
+      "Acceptance must be deterministic/offline: verify budget rejection, finite/negative actions, positive saved-fund contributions after withdrawal, over-20 legal contributions, no double counting, aggregate wealth conservation/growth identity sum(closing balances)=sum(opening balances)+N*endowment+(multiplier-1)*sum(contributions), round indexing at the 5/6 boundary, privacy/memory and variations in accepted parameters. Include hand-derived cases independent of execution helpers; a sampled check is not a theorem proof.",
+      "Use the generic notebook writers and offline preview. Final notebook: background/rationale; executed reporting code, contribution and wealth trajectories with withdrawal marker, phase statistics and mathematical comparisons; original decision rationales once in their own section; human-readable substantive assumptions without raw config field/value dumps; limitations. Avoid repeating the full results table in prose. Code must call external modules rather than implementing economic calculations or rerunning actors in cells.",
+      "The preview covers only problem definition, mathematical references/theory and assumptions/limitations. Actual behavior and its interpretation remain pending until recorded. The final report should explain actual observed adaptation, not infer a general learned policy or a causal treatment effect from one trajectory without a control. A static LLMPolicy with history/memory is not a trained reinforcement-learning policy.",
+      "Use one live primary simulation only. Report-only corrections must re-render the saved result without more actor calls. Offline acceptance and composition tests must not call live actors. Actor budgets are supplied centrally with enough room for all rounds and configured retries. Keep all new components in the versioned experiment bundle and do not modify the main scaffold."
+    ]
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "p1",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_c547b77e.contribution.v1"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+            "persona": "You are participant p1.",
+            "required_fields": [
+              "round",
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "endowment_this_round",
+              "balances",
+              "history"
+            ],
+            "max_attempts": 2,
+            "max_calls": 48,
+            "max_output_tokens": 4096,
+            "reasoning_effort": null
+          }
+        },
+        {
+          "id": "p2",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_c547b77e.contribution.v1"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+            "persona": "You are participant p2.",
+            "required_fields": [
+              "round",
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "endowment_this_round",
+              "balances",
+              "history"
+            ],
+            "max_attempts": 2,
+            "max_calls": 48,
+            "max_output_tokens": 4096,
+            "reasoning_effort": null
+          }
+        },
+        {
+          "id": "p3",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_c547b77e.contribution.v1"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+            "persona": "You are participant p3.",
+            "required_fields": [
+              "round",
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "endowment_this_round",
+              "balances",
+              "history"
+            ],
+            "max_attempts": 2,
+            "max_calls": 48,
+            "max_output_tokens": 4096,
+            "reasoning_effort": null
+          }
+        },
+        {
+          "id": "p4",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_c547b77e.contribution.v1"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+            "persona": "You are participant p4.",
+            "required_fields": [
+              "round",
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "endowment_this_round",
+              "balances",
+              "history"
+            ],
+            "max_attempts": 2,
+            "max_calls": 48,
+            "max_output_tokens": 4096,
+            "reasoning_effort": null
+          }
+        },
+        {
+          "id": "p5",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_c547b77e.contribution.v1"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "model": "muse-spark-1.3-contributor",
+            "instructions": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+            "persona": "You are participant p5.",
+            "required_fields": [
+              "round",
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "endowment_this_round",
+              "balances",
+              "history"
+            ],
+            "max_attempts": 2,
+            "max_calls": 48,
+            "max_output_tokens": 4096,
+            "reasoning_effort": null
+          }
+        }
+      ],
+      "parameters": {
+        "participant_count": 5,
+        "rounds": 10,
+        "endowed_rounds": 5,
+        "endowment": 20.0,
+        "multiplier": 2.0
+      },
+      "initial_public_state": {
+        "round": 1,
+        "rounds": 10,
+        "endowed_rounds": 5,
+        "endowment": 20.0,
+        "multiplier": 2.0,
+        "endowment_this_round": 20.0,
+        "balances": {
+          "p1": 0.0,
+          "p2": 0.0,
+          "p3": 0.0,
+          "p4": 0.0,
+          "p5": 0.0
+        },
+        "history": []
+      },
+      "initial_private_state": {}
+    },
+    "mechanism_id": "experimental.public_goods_c547b77e.public_goods.v1",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "rounds": 10
+    },
+    "permissions": {
+      "p1": {
+        "public_fields": [
+          "round",
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "endowment_this_round",
+          "balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p2": {
+        "public_fields": [
+          "round",
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "endowment_this_round",
+          "balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p3": {
+        "public_fields": [
+          "round",
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "endowment_this_round",
+          "balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p4": {
+        "public_fields": [
+          "round",
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "endowment_this_round",
+          "balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p5": {
+        "public_fields": [
+          "round",
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "endowment_this_round",
+          "balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      }
+    },
+    "phase_permissions": {},
+    "benchmark": null,
+    "max_steps": 100,
+    "assumptions": [
+      {
+        "path": "/world/parameters/participant_count",
+        "value": 5,
+        "source": "user",
+        "rationale": "The user fixes five participants for this run.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/rounds",
+        "value": 10,
+        "source": "user",
+        "rationale": "The user fixes a ten-round horizon.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/endowed_rounds",
+        "value": 5,
+        "source": "user",
+        "rationale": "The user withdraws the fresh endowment after round 5, so rounds 6-10 are funded from savings alone.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/endowment",
+        "value": 20.0,
+        "source": "user",
+        "rationale": "The user sets the early per-round endowment to 20 per participant.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/multiplier",
+        "value": 2.0,
+        "source": "user",
+        "rationale": "The user sets the public-good multiplier to 2.",
+        "reference": null
+      },
+      {
+        "path": "/protocol_id",
+        "value": "simultaneous.v1",
+        "source": "user",
+        "rationale": "The user requires simultaneous contributions with one action per participant per round.",
+        "reference": null
+      },
+      {
+        "path": "/protocol_parameters/rounds",
+        "value": 10,
+        "source": "user",
+        "rationale": "Ten simultaneous rounds with the full horizon and withdrawal schedule announced to all participants from the outset.",
+        "reference": null
+      },
+      {
+        "path": "/mechanism_id",
+        "value": "experimental.public_goods_c547b77e.public_goods.v1",
+        "source": "model",
+        "rationale": "Custom public-goods rules are needed because no approved mechanism implements endowment withdrawal with saved balances and a linear pool payout.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_parameters/instructions",
+        "value": "You are one participant in a repeated public-goods game with 5 participants over 10 simultaneous rounds. Rounds 1-5 give each participant a fresh endowment of 20; rounds 6-10 give 0. The horizon and withdrawal schedule are fixed and known to all from the outset. Each round your available funds equal your saved balance plus this round's endowment. Choose one contribution from 0 up to your available funds inclusive; you may give above 20 from savings or everything you hold, but you cannot borrow against this round's pool payout. After everyone commits, twice the total contributions are shared equally (each receives 2 x total / 5); your round payoff is endowment - contribution + that share, added to your saved balance. Past rounds publish every contribution and payoff. You decide simultaneously with the others: never claim knowledge of their uncommitted choices. Your objective is to maximize your own final saved balance, with no assigned social preferences. State a concise rationale citing your funds, the history, incentives and your beliefs about others. You may keep brief private notes in memory; only the mechanism changes balances.",
+        "source": "textbook",
+        "rationale": "Textbook risk-neutral objective: maximize own final saved balance under neutral framing, with no prescribed strategy or social preferences.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/p1",
+        "value": {
+          "public_fields": [
+            "round",
+            "rounds",
+            "endowed_rounds",
+            "endowment",
+            "multiplier",
+            "endowment_this_round",
+            "balances",
+            "history"
+          ],
+          "private_fields": [],
+          "readable_memory": true,
+          "writable_private_fields": [],
+          "writable_memory": true
+        },
+        "source": "model",
+        "rationale": "Completed rounds publish contributions, payoffs and balances to all; each participant sees only own memory, may update it, and cannot change balances, which only mechanism transitions update.",
+        "reference": null
+      }
+    ]
+  }
+}

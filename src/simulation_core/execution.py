@@ -8,6 +8,7 @@ from typing import Literal, Self
 from pydantic import model_validator
 
 from .benchmark import BenchmarkReport, BenchmarkRunner
+from .checkpoint import RuntimeOptions
 from .provenance import resolve_pointer, same_json
 from .registry import ComponentRegistry
 from .request import ExperimentRequest
@@ -22,6 +23,16 @@ class JobManifest(FrozenModel):
 
     @model_validator(mode="after")
     def preserve_supplied_inputs(self) -> Self:
+        actors = {actor.id: actor for actor in self.simulation.world.actors}
+        ids = [behavior.actor_id for behavior in self.request.actor_behaviors]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate actor behavior profile")
+        for behavior in self.request.actor_behaviors:
+            actor = actors.get(behavior.actor_id)
+            if actor is None or actor.policy_id != "llm.v1":
+                raise ValueError("Behavior profiles require a matching LLM actor")
+            if actor.policy_parameters.get("behavior") != behavior.model_dump(mode="json"):
+                raise ValueError("Resolved configuration overrides actor behavior")
         for item in self.request.supplied_inputs:
             if item.target_path is not None and not same_json(
                 resolve_pointer(self.simulation.model_dump(mode="json"), item.target_path),
@@ -55,8 +66,9 @@ class ExecutionBackend(ABC):
 class LocalBackend(ExecutionBackend):
     """Only explicitly trusted registered components may run here."""
 
-    def __init__(self, registry: ComponentRegistry) -> None:
+    def __init__(self, registry: ComponentRegistry, options: RuntimeOptions | None = None) -> None:
         self.registry = registry
+        self.options = options
 
     def validate(self, manifest: JobManifest) -> None:
         self.registry.validate_config(manifest.simulation)
@@ -64,7 +76,7 @@ class LocalBackend(ExecutionBackend):
     def execute(self, manifest_path: Path) -> RunResult:
         manifest = JobManifest.model_validate_json(manifest_path.read_text())
         self.validate(manifest)
-        return SimulationRuntime(self.registry).run(manifest.simulation)
+        return SimulationRuntime(self.registry, self.options).run(manifest.simulation)
 
     def benchmark(self, manifest: JobManifest, result: RunResult) -> BenchmarkReport | None:
         if manifest.simulation.benchmark is None:

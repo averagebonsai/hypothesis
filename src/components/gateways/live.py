@@ -9,9 +9,14 @@ from .openai import OpenAIResponsesGateway
 from .settings import LiveModelSettings
 
 
-def configured_gateway(model: str | None = None) -> tuple[str, ModelGateway]:
+def configured_gateway(
+    model: str | None = None,
+    *,
+    timeout: float = 180,
+    stream: bool = True,
+) -> tuple[str, ModelGateway]:
     settings = LiveModelSettings.load(model)
-    return _gateway(settings)
+    return _gateway(settings, timeout=timeout, stream=stream)
 
 
 def configured_coding_gateway(env_file: Path | None = None) -> tuple[str, ModelGateway]:

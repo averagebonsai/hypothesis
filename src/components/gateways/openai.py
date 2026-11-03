@@ -127,11 +127,15 @@ class OpenAIResponsesGateway(ModelGateway):
             try:
                 event = json.loads(payload)
                 kind = event["type"]
-                if kind in {
-                    "response.created",
-                    "response.in_progress",
-                    "response.output_item.added",
-                } and self.on_event is not None:
+                if (
+                    kind
+                    in {
+                        "response.created",
+                        "response.in_progress",
+                        "response.output_item.added",
+                    }
+                    and self.on_event is not None
+                ):
                     self.on_event(kind)
                 if kind in {"response.completed", "response.failed", "response.incomplete"}:
                     raw = json.dumps(event["response"]).encode()
@@ -160,7 +164,6 @@ class OpenAIResponsesGateway(ModelGateway):
             "model": request.model,
             "instructions": request.instructions,
             "input": request.input_json,
-            "max_output_tokens": request.max_output_tokens,
             "store": False,
             "text": {
                 "format": {
@@ -175,6 +178,8 @@ class OpenAIResponsesGateway(ModelGateway):
         }
         if request.reasoning_effort is not None:
             body["reasoning"] = {"effort": request.reasoning_effort}
+        if request.max_output_tokens is not None:
+            body["max_output_tokens"] = request.max_output_tokens
         if self.stream:
             body["stream"] = True
         http_request = Request(

@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from agent_tools.contracts import (
     CodingPlan,
     Implementation,
     ImplementationResponse,
+    NotebookReview,
     PlanningResponse,
     ReviewRequest,
     SourceFile,
@@ -19,6 +21,60 @@ from simulation_core.model_gateway import ModelResponse
 
 ROOT = Path("/workspace")
 INPUTS = Path("/inputs")
+
+
+def update_session_inputs(source: Path) -> None:
+    """Offline controller helper: replace inputs, retain workspace notes and CLI home."""
+    if os.geteuid() != 0 or not Path("/.dockerenv").exists():
+        raise RuntimeError("Session input updates require the isolated controller helper")
+    for directory in (ROOT, Path("/session-home")):
+        directory.mkdir(parents=True, exist_ok=True)
+        # Docker initializes a named volume with the image directory's ownership.
+        # Muse's WORKDIR is already owned by 10001; root without CAP_FOWNER cannot
+        # chmod it, and the authoring user already has the necessary access.
+        owner = directory.stat().st_uid
+        if owner == 0:
+            directory.chmod(0o777)
+        elif owner != 10001:
+            raise ValueError("Unexpected authoring volume ownership")
+    INPUTS.mkdir(parents=True, exist_ok=True)
+    for path in INPUTS.iterdir():
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    shutil.copytree(source / "inputs", INPUTS, dirs_exist_ok=True)
+    for path in INPUTS.rglob("*"):
+        if path.is_symlink():
+            raise ValueError("Session inputs cannot contain symlinks")
+        path.chmod(0o755 if path.is_dir() else 0o644)
+    os.setgid(10001)
+    os.setuid(10001)
+    # Only controller-returned/normalized sources overlay the persistent workspace.
+    # Scratch files, notes and prototypes from earlier stages otherwise survive.
+    for path in (source / "workspace").rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(source / "workspace")
+        target = ROOT / relative
+        if any(parent.is_symlink() for parent in (target, *target.parents)):
+            raise ValueError("Cannot overlay a symlinked workspace path")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.chmod(0o777)
+        target.write_bytes(path.read_bytes())
+        target.chmod(0o666)
+    rules = ROOT / "AGENTS.md"
+    if not rules.exists() and not rules.is_symlink():
+        rules.symlink_to(INPUTS / "AGENTS.md")
+
+
+def begin_stage() -> None:
+    """A fresh response is required for every turn; previous scratch/context stays."""
+    for name in ("response.json", "review.json", "notebook_review.json"):
+        path = ROOT / name
+        if path.is_dir() and not path.is_symlink():
+            raise ValueError("Reserved response path is a directory")
+        path.unlink(missing_ok=True)
 
 
 def read_text(path: Path, limit: int = 600_000) -> str:
@@ -43,8 +99,11 @@ def source_files(directory: Path, *, tests: bool) -> tuple[SourceFile, ...]:
 def assemble() -> None:
     """Build native response objects from ordinary source files, without imports."""
     task = json.loads((INPUTS / "task.json").read_text())
+    response: NotebookReview | PlanningResponse | ImplementationResponse
     review_path = ROOT / "review.json"
-    if review_path.exists():
+    if task["stage"] == "review_notebook":
+        response = NotebookReview.model_validate_json(read_text(ROOT / "notebook_review.json"))
+    elif review_path.exists():
         review = ReviewRequest.model_validate_json(read_text(review_path))
         response = (
             PlanningResponse(plan=None, review=review)
@@ -70,12 +129,48 @@ def assemble() -> None:
     print("Validated response.json; no experiment code was imported")
 
 
+def snapshot_workspace(root: Path) -> dict[str, str]:
+    """Bounded data-only salvage, never import partial implementations."""
+    files: dict[str, str] = {}
+    total = 0
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if relative not in {
+            "draft.json",
+            "response.json",
+            "summary.txt",
+            "review.json",
+            "notebook_review.json",
+            "README.md",
+        } and not (
+            relative.startswith(("tests/", "experiment_extension/")) and path.suffix == ".py"
+        ):
+            continue
+        if any(parent.is_symlink() for parent in (path, *path.parents) if parent != root.parent):
+            raise ValueError("Cannot salvage symlinked files")
+        if path.is_file():
+            text = read_text(path, 600_000)
+            total += len(text.encode())
+            if total > 4_000_000 or len(files) >= 200:
+                raise ValueError("Partial workspace exceeds snapshot budget")
+            files[relative] = text
+    return files
+
+
 def main() -> None:
+    if sys.argv[1:] == ["update-session"]:
+        update_session_inputs(Path("/source"))
+        return
+    if sys.argv[1:] == ["snapshot"]:
+        print(json.dumps(snapshot_workspace(ROOT)))
+        return
     if sys.argv[1:] == ["assemble"]:
         assemble()
         return
-    if len(sys.argv) != 3:
-        raise SystemExit("Usage: python -m extension_worker.muse MODEL EFFORT | assemble")
+    if len(sys.argv) != 4:
+        raise SystemExit(
+            "Usage: python -m extension_worker.muse MODEL EFFORT SESSION_UUID | assemble"
+        )
     if not Path("/.dockerenv").is_file() or os.geteuid() != 10001:
         raise RuntimeError("Muse authoring must run inside its restricted Docker container")
     print("HYPOTHESIS_MUSE_AUTH", flush=True)
@@ -83,6 +178,24 @@ def main() -> None:
     key = auth["api_key"]
     home = Path(os.environ["HOME"])
     home.mkdir(parents=True, exist_ok=True)
+    begin_stage()
+    task = json.loads((INPUTS / "task.json").read_text())
+    prompt = ROOT / ".stage-prompt.md"
+    prompt.write_text(
+        (
+            (INPUTS / "AGENTS.md").read_text() + "\n\n"
+            if not task.get("authoring_session", {}).get("continuation")
+            else ""
+        )
+        + "Continue this same experiment and session. Current stage: "
+        + task["stage"]
+        + ".\n"
+        "Read /inputs/task.json and /inputs/response-schema.json for the current contract/feedback. "
+        "Retain earlier discoveries and decisions; do not repeat completed work. "
+        "Follow /inputs/AGENTS.md and the completion checklist. "
+        "The workspace and your conversation are retained from earlier stages. "
+        "Frozen tests/configuration remain controller-owned. Write and assemble a NEW response.json.\n"
+    )
 
     def progress(line: str) -> str | None:
         print(line.replace(key, "[REDACTED]"), flush=True)
@@ -94,6 +207,8 @@ def main() -> None:
         [
             "muse",
             "exec",
+            "--session-id",
+            sys.argv[3],
             "--workspace",
             "/workspace",
             "--model",
@@ -112,7 +227,7 @@ def main() -> None:
             "--disable-request-user-input",
             "--no-foreign-personal-context",
             "--prompt-file",
-            "/inputs/AGENTS.md",
+            str(prompt),
         ],
         seconds=3500,
         max_bytes=12_000_000,
@@ -127,7 +242,9 @@ def main() -> None:
     if key in text:
         raise RuntimeError("Authoring output contains a credential; refusing export")
     task = json.loads(Path("/inputs/task.json").read_text())
-    if task["stage"] == "plan_and_tests":
+    if task["stage"] == "review_notebook":
+        NotebookReview.model_validate_json(text)
+    elif task["stage"] == "plan_and_tests":
         PlanningResponse.model_validate_json(text)
     else:
         ImplementationResponse.model_validate_json(text)

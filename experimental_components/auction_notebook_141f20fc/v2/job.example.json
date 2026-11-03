@@ -1,0 +1,245 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "How do private-value LLM bidders behave in a sealed-bid second-price auction compared with truthful bidding?",
+    "execution_kind": "agent_simulation",
+    "problem": null,
+    "supplied_inputs": [
+      {
+        "name": "bidder_a private valuation",
+        "value": 90.0,
+        "target_path": "/world/initial_private_state/bidder_a/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_b private valuation",
+        "value": 65.0,
+        "target_path": "/world/initial_private_state/bidder_b/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_c private valuation",
+        "value": 40.0,
+        "target_path": "/world/initial_private_state/bidder_c/facts/valuation",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_a actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/0/policy_parameters/model",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_b actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/1/policy_parameters/model",
+        "source_reference": null
+      },
+      {
+        "name": "bidder_c actor model",
+        "value": "muse-spark-1.3-contributor",
+        "target_path": "/world/actors/2/policy_parameters/model",
+        "source_reference": null
+      }
+    ],
+    "requirements": [
+      "This is an agent simulation, not a standalone optimization task. Use the existing policy, observation/privacy, protocol, mechanism, runtime and recording interfaces.",
+      "Actors are bidder_a, bidder_b and bidder_c in that configuration order. Each is an LLM policy using MODEL, not a scripted fixture. MODEL_CODING is only for the external coding agent.",
+      "One simultaneous sealed-bid round, one action per bidder. Bidders see the auction rules and only their own private valuation/memory, never another bidder's private state or submitted bid before committing.",
+      "Textbook independent private values with risk-neutral quasi-linear utility, one indivisible item, no reserve and no budget constraints. Record these assumptions in configuration.",
+      "A bid is a finite nonnegative number. Bidding above or below one's valuation is legal. Do not reject a bid merely because it is strategically poor or would produce negative utility.",
+      "Highest bid wins, pays the second-highest submitted bid, and has utility own valuation minus payment. Other bidders pay zero and have utility zero. Break highest-bid ties by the stated configuration order and record that convention.",
+      "Compute a separate truthful-bidding reference from private valuations after the LLM decisions are committed. Explain that truthfulness is weakly dominant under these assumptions; do not claim it is the unique equilibrium or label every nontruthful bid irrational.",
+      "Provide custom verification for allocation, payment, utilities, ties and bid legality. Do not force the piecewise auction rules into an unsuitable numeric expression language or invent irrelevant simplex/budget checks.",
+      "Generate an executed results notebook comparing actual bids with private valuations and the truthful reference, actual versus reference winners/payments/payoffs, and the recorded decision rationales and assumptions.",
+      "Use real LLM policies in the primary simulation. Execution capabilities are supplied separately; never replace requested live actors with scripted decisions.",
+      "The notebook must teach a reader without domain knowledge: explain the background and rationale, interpret the observed results and theoretical comparison, show recorded decision rationales once in their own section, list assumptions in ordinary prose/bullets, and explain limitations. Use the toolkit explanatory.v1 reporting contract.",
+      "A separately calculated theoretical point reference is sufficient; a new equilibrium solver is not a requirement. Keep all domain calculations outside notebook cells and derive report data from the saved run and resolved configuration."
+    ]
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "bidder_a",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "submit_bid": "experimental.auction_notebook_141f20fc.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "instructions": "You are bidding in the sealed-bid second-price auction described in the visible 'rules'. Your private valuation appears in your private facts. Submit exactly one action of kind 'submit_bid' with payload {\"bid\": <your bid as a finite nonnegative number>}. Your bid may be above, below, or equal to your valuation. Base your decision only on information in your observation; do not invent other bidders' valuations or bids, and do not claim knowledge of choices that have not been revealed. Include a concise rationale that cites your valuation and explains your chosen bid.",
+            "model": "muse-spark-1.3-contributor",
+            "persona": "You are bidder_a, one of three bidders (bidder_a, bidder_b, bidder_c) competing for one indivisible item.",
+            "required_fields": [
+              "rules"
+            ]
+          }
+        },
+        {
+          "id": "bidder_b",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "submit_bid": "experimental.auction_notebook_141f20fc.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "instructions": "You are bidding in the sealed-bid second-price auction described in the visible 'rules'. Your private valuation appears in your private facts. Submit exactly one action of kind 'submit_bid' with payload {\"bid\": <your bid as a finite nonnegative number>}. Your bid may be above, below, or equal to your valuation. Base your decision only on information in your observation; do not invent other bidders' valuations or bids, and do not claim knowledge of choices that have not been revealed. Include a concise rationale that cites your valuation and explains your chosen bid.",
+            "model": "muse-spark-1.3-contributor",
+            "persona": "You are bidder_b, one of three bidders (bidder_a, bidder_b, bidder_c) competing for one indivisible item.",
+            "required_fields": [
+              "rules"
+            ]
+          }
+        },
+        {
+          "id": "bidder_c",
+          "kind": "bidder",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "submit_bid": "experimental.auction_notebook_141f20fc.bid"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "instructions": "You are bidding in the sealed-bid second-price auction described in the visible 'rules'. Your private valuation appears in your private facts. Submit exactly one action of kind 'submit_bid' with payload {\"bid\": <your bid as a finite nonnegative number>}. Your bid may be above, below, or equal to your valuation. Base your decision only on information in your observation; do not invent other bidders' valuations or bids, and do not claim knowledge of choices that have not been revealed. Include a concise rationale that cites your valuation and explains your chosen bid.",
+            "model": "muse-spark-1.3-contributor",
+            "persona": "You are bidder_c, one of three bidders (bidder_a, bidder_b, bidder_c) competing for one indivisible item.",
+            "required_fields": [
+              "rules"
+            ]
+          }
+        }
+      ],
+      "parameters": {
+        "action_kind": "submit_bid",
+        "bids_field": "bids",
+        "outcome_field": "auction_outcome",
+        "tie_break": "configuration_order"
+      },
+      "initial_public_state": {
+        "rules": "Sealed-bid second-price auction for one indivisible item. Each bidder privately knows only their own valuation and submits exactly one sealed bid, a finite nonnegative number. Bids are revealed only after every bidder has committed. The highest bid wins; the winner pays the second-highest submitted bid. The winner's payoff equals their own valuation minus the price paid; every other bidder pays nothing and receives zero. Ties for the highest bid are broken by bidder order: bidder_a first, then bidder_b, then bidder_c. There is no reserve price and no budget constraints. Bidding above or below your own valuation is allowed."
+      },
+      "initial_private_state": {
+        "bidder_a": {
+          "facts": {
+            "valuation": 90.0
+          },
+          "memory": {}
+        },
+        "bidder_b": {
+          "facts": {
+            "valuation": 65.0
+          },
+          "memory": {}
+        },
+        "bidder_c": {
+          "facts": {
+            "valuation": 40.0
+          },
+          "memory": {}
+        }
+      }
+    },
+    "mechanism_id": "experimental.auction_notebook_141f20fc.second_price",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "rounds": 1
+    },
+    "permissions": {
+      "bidder_a": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "bidder_b": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "bidder_c": {
+        "public_fields": [
+          "rules"
+        ],
+        "private_fields": [
+          "valuation"
+        ],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      }
+    },
+    "phase_permissions": {},
+    "benchmark": null,
+    "max_steps": 10,
+    "assumptions": [
+      {
+        "path": "/world/parameters/tie_break",
+        "value": "configuration_order",
+        "source": "user",
+        "rationale": "The user requires highest-bid ties to be broken by configuration order (bidder_a, then bidder_b, then bidder_c).",
+        "reference": null
+      },
+      {
+        "path": "/protocol_parameters/rounds",
+        "value": 1,
+        "source": "user",
+        "rationale": "The user requires one simultaneous sealed-bid round with one action per bidder.",
+        "reference": null
+      },
+      {
+        "path": "/mechanism_id",
+        "value": "experimental.auction_notebook_141f20fc.second_price",
+        "source": "textbook",
+        "rationale": "The settlement implements the textbook second-price sealed-bid (Vickrey) rules under independent private values with risk-neutral quasi-linear utility: the highest bid wins and pays the second-highest submitted bid, the winner's utility is valuation minus payment, and losers receive zero.",
+        "reference": "Vickrey (1961)"
+      },
+      {
+        "path": "/world/initial_public_state/rules",
+        "value": "Sealed-bid second-price auction for one indivisible item. Each bidder privately knows only their own valuation and submits exactly one sealed bid, a finite nonnegative number. Bids are revealed only after every bidder has committed. The highest bid wins; the winner pays the second-highest submitted bid. The winner's payoff equals their own valuation minus the price paid; every other bidder pays nothing and receives zero. Ties for the highest bid are broken by bidder order: bidder_a first, then bidder_b, then bidder_c. There is no reserve price and no budget constraints. Bidding above or below your own valuation is allowed.",
+        "source": "user",
+        "rationale": "The user requires bidders to see the auction rules: one indivisible item, no reserve price, no budget constraints, and the payoff rule stated in ordinary language.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/bidder_a/private_fields",
+        "value": [
+          "valuation"
+        ],
+        "source": "user",
+        "rationale": "Sealed-bid privacy: bidder_a observes only their own valuation fact; the same restriction is configured for every bidder.",
+        "reference": null
+      },
+      {
+        "path": "/permissions/bidder_a/public_fields",
+        "value": [
+          "rules"
+        ],
+        "source": "user",
+        "rationale": "Sealed-bid privacy: bidder_a sees only the public auction rules before committing; the same restriction is configured for every bidder.",
+        "reference": null
+      }
+    ]
+  }
+}

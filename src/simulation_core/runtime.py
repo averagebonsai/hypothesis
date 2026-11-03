@@ -1,13 +1,17 @@
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 
-from .logging import log_committed_decisions
+from .checkpoint import RuntimeCheckpoint, RuntimeOptions, config_digest
+from .logging import log_committed_decisions, replay
 from .observation import observe, permissions_for
 from .registry import ComponentRegistry
 from .types import (
     Decision,
     Event,
     ModelCallRecord,
+    Observation,
     PrivateState,
     RunResult,
     SimulationConfig,
@@ -20,11 +24,13 @@ from .validation import initial_state, validate_state
 class SimulationRuntime:
     """Experiment-independent trusted loop; components are fresh for each run."""
 
-    def __init__(self, registry: ComponentRegistry) -> None:
+    def __init__(self, registry: ComponentRegistry, options: RuntimeOptions | None = None) -> None:
         self.registry = registry
+        self.options = options or RuntimeOptions()
 
     def run(self, config: SimulationConfig) -> RunResult:
         config = SimulationConfig.model_validate(config.model_dump())
+        fingerprint = config_digest(config)
         self.registry.validate_config(config)
         world = config.world
         mechanism = self.registry.mechanisms[config.mechanism_id]()
@@ -36,6 +42,41 @@ class SimulationRuntime:
         mechanism.validate_state(world.model_copy(deep=True), state.model_copy(deep=True))
         events = [Event(sequence=0, kind="initialized", state=state.model_copy(deep=True))]
         outcomes = []
+        pending: dict[str, Decision] = {}
+        saved_calls: dict[str, tuple[ModelCallRecord, ...]] = {}
+        checkpoint = self.options.checkpoint
+        if checkpoint is not None:
+            checkpoint.validate_config(config)
+            snapshots = replay(checkpoint.events)
+            if snapshots[0] != state:
+                raise ValueError("Checkpoint initialization differs from configuration")
+            for snapshot in snapshots:
+                mechanism.validate_state(
+                    world.model_copy(deep=True), snapshot.model_copy(deep=True)
+                )
+            events = list(checkpoint.events)
+            state = snapshots[-1]
+            outcomes = [event.outcome for event in events if event.outcome is not None]
+            pending = dict(checkpoint.pending)
+            saved_calls = dict(checkpoint.pending_calls)
+            for aid, policy in policies.items():
+                policy.restore_model_calls(
+                    tuple(
+                        call
+                        for event in events
+                        for call in event.model_calls
+                        if call.actor_id == aid
+                    )
+                    + saved_calls.get(aid, ())
+                )
+
+        def persist() -> None:
+            if self.options.on_checkpoint is not None:
+                self.options.on_checkpoint(
+                    RuntimeCheckpoint.create(config, tuple(events), pending, saved_calls)
+                )
+
+        persist()
 
         def terminal() -> bool:
             return protocol.is_terminal(world.model_copy(deep=True), state.model_copy(deep=True))
@@ -46,18 +87,61 @@ class SimulationRuntime:
             )
             if not active or len(set(active)) != len(active) or set(active) - actors.keys():
                 raise ValueError("Invalid active actor set")
+            round_started = time.monotonic()
+            if set(pending) - set(active) or set(saved_calls) - set(active):
+                raise ValueError("Checkpoint contains inactive actors")
+            observations = {}
+            for aid in active:
+                actor = actors[aid]
+                observation = observe(actor, state, permissions_for(config, aid, state.phase))
+                if policies[aid].required_observation_fields() - observation.visible.keys():
+                    raise ValueError("Required observation fields unavailable")
+                observations[aid] = observation
+                policies[aid].set_decision_context(f"{fingerprint}:{state.tick}:{aid}")
+            baseline = {
+                aid: len(policies[aid].model_calls()) - len(saved_calls.get(aid, ()))
+                for aid in active
+            }
+
+            def choose(
+                aid: str,
+                observations: dict[str, Observation] = observations,
+                tick: int = state.tick,
+            ) -> Decision:
+                started = time.monotonic()
+                try:
+                    return policies[aid].choose_action(observations[aid])
+                finally:
+                    if self.options.on_timing is not None:
+                        self.options.on_timing(
+                            {
+                                "stage": "actor",
+                                "tick": tick,
+                                "actor_id": aid,
+                                "seconds": time.monotonic() - started,
+                            }
+                        )
+
+            failure: BaseException | None = None
+            with ThreadPoolExecutor(max_workers=self.options.max_concurrency) as pool:
+                futures = {pool.submit(choose, aid): aid for aid in active if aid not in pending}
+                for future in as_completed(futures):
+                    aid = futures[future]
+                    try:
+                        pending[aid] = future.result().model_copy(deep=True)
+                    except Exception as exc:  # noqa: BLE001 - retain completed peers before stopping
+                        failure = failure or exc
+                    saved_calls[aid] = policies[aid].model_calls()[baseline[aid] :]
+                    persist()
+            if failure is not None:
+                raise failure
             decisions = []
             model_calls: list[ModelCallRecord] = []
             for aid in active:
                 actor = actors[aid]
                 permissions = permissions_for(config, aid, state.phase)
-                observation = observe(actor, state, permissions)
-                policy = policies[aid]
-                if policy.required_observation_fields() - observation.visible.keys():
-                    raise ValueError("Required observation fields unavailable")
-                call_count = len(policy.model_calls())
-                decision = policy.choose_action(observation)
-                model_calls.extend(policy.model_calls()[call_count:])
+                decision = pending[aid]
+                model_calls.extend(saved_calls.get(aid, ()))
                 decision = Decision.model_validate(decision.model_dump()).model_copy(deep=True)
                 action = decision.action
                 if action.actor_id != aid or action.kind not in actor.action_space.schemas:
@@ -131,6 +215,17 @@ class SimulationRuntime:
             ).model_copy(deep=True)
             state = proposed.model_copy(deep=True)
             events.append(event)
+            pending = {}
+            saved_calls = {}
+            persist()
+            if self.options.on_timing is not None:
+                self.options.on_timing(
+                    {
+                        "stage": "round",
+                        "tick": state.tick,
+                        "seconds": time.monotonic() - round_started,
+                    }
+                )
             log_committed_decisions(event)
             outcomes.append(transition.outcome.model_copy(deep=True))
         return RunResult(

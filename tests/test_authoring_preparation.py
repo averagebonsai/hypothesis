@@ -241,6 +241,18 @@ def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, arti
     class FakeWorker:
         calls = 0
 
+        def render(self, candidate, job, output):
+            from agent_tools.specs import ReportReceipt, ReportResponse
+
+            return ReportReceipt(
+                operation="preview",
+                bundle_digest="synthetic",
+                image_id="synthetic",
+                framework_digest="synthetic",
+                input_sha256="synthetic",
+                response=ReportResponse(bundle_digest="synthetic", notebook_json="synthetic"),
+            )
+
         def execute(self, candidate, job, **kwargs):
             self.calls += 1
             passed = self.calls == 5

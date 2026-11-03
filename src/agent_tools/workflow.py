@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from simulation_core.execution import JobManifest
 from simulation_core.request import ExperimentRequest
 
 from .authoring import (
@@ -68,14 +69,135 @@ def _run_authoring(
         candidate = destination / f"v{version}"
         job = materialize(candidate, request, plan, implementation, version)
         seal_bundle(candidate)
+        if isinstance(job, JobManifest) and plan.bundle.notebook is not None:
+            progress(
+                f"Rendering offline problem/theory preview for candidate v{version}; no actor calls"
+            )
+            preview = worker.render(candidate, job, agent.audit / f"preview-{version}")
+            private_json(agent.audit / f"preview-{version}.json", preview.model_dump(mode="json"))
+            if not preview.response.passed:
+                previous = implementation
+                feedback = "Offline preview failed: " + (
+                    preview.response.error or "Missing notebook"
+                )
+                version += 1
+                continue
+            if agent.content_review:
+                review = agent.review_notebook(
+                    request,
+                    plan,
+                    implementation,
+                    preview.response.notebook_json or "",
+                    observed=False,
+                )
+                private_json(
+                    agent.audit / f"preview-review-{version}.json", review.model_dump(mode="json")
+                )
+                if not review.approved:
+                    previous = implementation
+                    feedback = (
+                        "Correct these named notebook/content issues before live execution: "
+                        + "; ".join(review.issues)
+                    )
+                    version += 1
+                    continue
         progress(f"Validating and running candidate v{version} in the isolated worker")
         receipt = worker.execute(candidate, job, operation="run")
         private_json(agent.audit / f"validation-{version}.json", receipt.model_dump(mode="json"))
         if receipt.response.passed and (
             receipt.response.result is not None or receipt.response.tool_result is not None
         ):
-            progress(f"Candidate v{version} completed with validation and report artifacts")
-            return AuthoringOutcome(status="completed", receipt=receipt, candidate=str(candidate))
+            simulation_candidate = candidate
+            report_receipt = None
+            report_candidate = None
+            report_output = None
+            notebook = receipt.response.notebook_json
+            if (
+                agent.content_review
+                and notebook is not None
+                and receipt.response.result is not None
+            ):
+                while True:
+                    review = agent.review_notebook(
+                        request, plan, implementation, notebook, observed=True
+                    )
+                    private_json(
+                        agent.audit / f"result-review-{version}.json",
+                        review.model_dump(mode="json"),
+                    )
+                    if review.approved:
+                        break
+                    assert plan.bundle.notebook is not None
+                    report_module = (
+                        plan.bundle.notebook.generator.split(":")[0].replace(".", "/") + ".py"
+                    )
+                    revised = agent.implement(
+                        request,
+                        plan,
+                        previous=implementation,
+                        feedback="The live run is committed; NEVER rerun it. Modify ONLY "
+                        + report_module
+                        + ". Preserve every other source byte-for-byte. Repair these editorial issues and return all source files: "
+                        + "; ".join(review.issues),
+                    )
+                    before = {f.path: f.content for f in implementation.files}
+                    after = {f.path: f.content for f in revised.files}
+                    if set(before) != set(after) or any(
+                        before[p] != after[p] for p in before if p != report_module
+                    ):
+                        return AuthoringOutcome(
+                            status="needs_review",
+                            receipt=receipt,
+                            candidate=str(simulation_candidate),
+                            review=ReviewRequest(
+                                status="needs_review",
+                                reason="Report repair changed scientific source; no live rerun performed",
+                                affected_contracts=("report_only",),
+                            ),
+                        )
+                    implementation = revised
+                    version += 1
+                    report_candidate = destination / f"v{version}"
+                    materialize(report_candidate, request, plan, implementation, version)
+                    seal_bundle(report_candidate)
+                    report_output = agent.audit / f"report-{version}"
+                    report_receipt = worker.render(
+                        report_candidate, receipt.response.result, report_output
+                    )
+                    if not report_receipt.response.passed:
+                        return AuthoringOutcome(
+                            status="needs_review",
+                            receipt=receipt,
+                            candidate=str(simulation_candidate),
+                            review=ReviewRequest(
+                                status="needs_review",
+                                reason="Report-only validation failed; saved simulation retained",
+                                affected_contracts=("report_only",),
+                            ),
+                        )
+                    notebook = report_receipt.response.notebook_json or ""
+            progress("Candidate completed with validation and report artifacts")
+            return AuthoringOutcome(
+                status="completed",
+                receipt=receipt,
+                candidate=str(simulation_candidate),
+                report_receipt=report_receipt,
+                report_candidate=None if report_candidate is None else str(report_candidate),
+                report_output=None if report_output is None else str(report_output),
+            )
+        if receipt.response.diagnostic is not None or receipt.actor_api_attempts:
+            # Once actors have produced a result, do not silently repeat the experiment
+            # to fix its presentation or validation. Preserve it for report-only repair.
+            return AuthoringOutcome(
+                status="needs_review",
+                receipt=receipt,
+                candidate=str(candidate),
+                review=ReviewRequest(
+                    status="needs_review",
+                    reason="The primary simulation produced an artifact or attempted live actor calls. Inspect retained evidence; use report-only repair if a saved result exists. Live execution will not be repeated automatically.",
+                    affected_contracts=("saved_result", "live_execution"),
+                ),
+            )
         previous = implementation
         feedback = (
             "\n".join(

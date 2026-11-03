@@ -106,3 +106,21 @@ unless explicitly configured; per-call limits and worker isolation remain.
 Preserve versions and receipts. Failed-run diagnostics may be retained but are
 unapproved. Passing tests permits only isolated execution, not global promotion.
 Provide concise design rationales, not private internal reasoning.
+
+For new simulation reports use NotebookSpec.report_version="explanatory.v1" and
+simulation_core.reports.write_experiment_notebook. Provide a ReportNarrative for
+non-specialists, external mathematical references and relevant figures. Use five
+sections: background/rationale; execution/results/comparison/interpretation;
+recorded decision rationales once; assumptions in prose/bullets; limitations.
+No JSON dumps, duplicate result snapshots or domain calculations in cells.
+
+Read toolkit.interface_guide first for the concise routes, exact parent methods,
+component map and completion checklist. Native configuration remains required.
+Declare an offline NotebookSpec.preview_generator (JobManifest, Path) -> Path using
+ReportPreview/write_preview_notebook: problem definition, mathematical benchmark,
+theoretical explanations, assumptions and limitations only. Leave observed LLM
+results, rationales and performance interpretation pending; never substitute guessed
+or synthetic actor performance. Use fake policies in acceptance tests. The primary
+run is the only live integration execution. Operator execution_capabilities.actor_execution
+centrally resolves actor transport settings before freeze. Finish after relevant
+checks and the content checklist pass; further calls must address a named issue.

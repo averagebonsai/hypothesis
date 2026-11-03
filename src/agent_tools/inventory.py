@@ -30,6 +30,10 @@ def inventory() -> dict[str, JsonValue]:
     result["policies"] = ["scripted.v1", "llm.v1"]
     result["decision_shapes_per_actor"] = {key: list(value) for key, value in SHAPES.items()}
     result["shared_tools"] = {
+        "simulation_core.reports.write_experiment_notebook": {
+            "signature": "(artifact, directory, ReportNarrative, *, references=(), figures=()) -> Path",
+            "purpose": "Five explanatory sections, one result table, rationales once, plain-language assumptions; declare NotebookSpec.report_version=explanatory.v1",
+        },
         "components.common.math.scalar.maximize_scalar": {
             "constraints": "One finite interval, no coupled vector constraints",
             "contract": SCALAR_SEARCH_CONTRACT.model_dump(mode="json"),

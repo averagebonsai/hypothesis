@@ -312,3 +312,73 @@ def test_trusted_build_context_rejects_links_to_external_files(tmp_path):
     (project / "src/alias.py").symlink_to(secret)
     with pytest.raises(ValueError, match="symbolic links"):
         copy_trusted_context(project, tmp_path / "context")
+
+
+def test_worker_persists_checkpoint_on_timeout_and_requires_explicit_matching_resume(
+    bundle,
+    monkeypatch,
+    tmp_path,
+):
+    from components.library import standard_registry
+    from simulation_core.checkpoint import RuntimeOptions
+    from simulation_core.runtime import SimulationRuntime
+
+    seal = seal_bundle(bundle)
+    job = JobManifest.model_validate_json((bundle / "job.example.json").read_text())
+    snapshots = []
+    SimulationRuntime(standard_registry(), RuntimeOptions(on_checkpoint=snapshots.append)).run(
+        job.simulation
+    )
+    snapshot = snapshots[-1]
+    recovery = tmp_path / "current-run"
+    interrupted = True
+    runs = []
+
+    def command(args, **kwargs):
+        nonlocal interrupted
+        if "inspect" in args:
+            return ProcessResult(0, "sha256:" + "a" * 64, "")
+        job_mount = next(a for a in args if a.startswith("type=bind,") and "dst=/job," in a)
+        job_dir = Path(job_mount.split("src=", 1)[1].split(",dst=", 1)[0])
+        runs.append((job_dir / "checkpoint.json").exists())
+        if interrupted:
+            interrupted = False
+            kwargs["on_stderr_line"](
+                "HYPOTHESIS_CHECKPOINT:"
+                + json.dumps(
+                    {
+                        **snapshot.model_dump(mode="json"),
+                        "event_count": len(snapshot.events),
+                    }
+                )
+            )
+            raise ProcessLimitError("offline simulated timeout")
+        assert json.loads((job_dir / "checkpoint.json").read_text()) == snapshot.model_dump(
+            mode="json"
+        )
+        response = WorkerResponse(
+            bundle_digest=seal.digest,
+            checks=tuple(
+                CheckResult(name=name, passed=True, exit_code=0, output="Mocked transport")
+                for name in sorted(VALIDATION_CHECKS)
+            ),
+        )
+        return ProcessResult(0, response.model_dump_json(), "")
+
+    monkeypatch.setattr("agent_tools.docker_worker.bounded_command", command)
+    monkeypatch.setattr("agent_tools.docker_worker.subprocess.run", lambda *args, **kwargs: None)
+    worker = DockerWorker(PROJECT)
+    with pytest.raises(ProcessLimitError):
+        worker.execute(bundle, job, checkpoint_dir=recovery)
+    assert (recovery / "checkpoint.json").stat().st_mode & 0o777 == 0o600
+    with pytest.raises(ValueError, match="explicit resume"):
+        worker.execute(bundle, job, checkpoint_dir=recovery)
+    changed = job.model_copy(
+        update={"simulation": job.simulation.model_copy(update={"max_steps": 1})}
+    )
+    with pytest.raises(ValueError, match="Resume identity"):
+        worker.execute(bundle, changed, checkpoint_dir=recovery, resume=True)
+    receipt = worker.execute(bundle, job, checkpoint_dir=recovery, resume=True)
+    assert receipt.checkpoint_directory == str(recovery)
+    assert receipt.elapsed_seconds > 0
+    assert runs == [False, True]

@@ -43,6 +43,7 @@ def test_stage_keeps_current_task_and_uses_on_demand_sources(tmp_path):
     assert sorted(p.name for p in (tmp_path / "inputs").iterdir()) == [
         "AGENTS.md",
         "response-schema.json",
+        "starter",
         "task.json",
     ]
     assert (tmp_path / "inputs/AGENTS.md").read_text() == "General coding instructions"
@@ -59,8 +60,13 @@ def test_container_mounts_only_current_workspace_and_inputs(tmp_path):
     assert "experimental_components" not in joined
     assert "--privileged" not in args and "--read-only" in args
     assert "--max-model-steps" not in args
-    assert "src=/tmp/fresh-stage/inputs,dst=/inputs,readonly" in joined
-    assert "src=/tmp/fresh-stage/workspace,dst=/workspace" in joined
+    assert f"src={gateway.volume('inputs')},dst=/inputs,readonly" in joined
+    assert f"src={gateway.volume('workspace')},dst=/workspace" in joined
+    assert f"src={gateway.volume('home')},dst=/session-home" in joined
+    assert "--detach" in args
+    execution = gateway.exec_arguments(request())
+    assert gateway.session_id in execution and gateway.container_name in execution
+    assert "--max-model-steps" not in execution
     assert "--user" in args and "10001:10001" in args
 
 
@@ -102,6 +108,7 @@ def test_api_backend_is_explicit_and_cli_is_default(monkeypatch, tmp_path):
 
     monkeypatch.setenv("API_KEY", "fake-key")
     monkeypatch.setenv("MODEL_CODING", "muse-spark-1.3")
+    monkeypatch.setenv("MODEL", "actor-model")
     project = Path(__file__).resolve().parents[1]
     cli = CodingAgent.from_environment(project, tmp_path / "cli", sandbox="fresh")
     assert isinstance(cli.gateway.gateway, MuseCodeGateway)

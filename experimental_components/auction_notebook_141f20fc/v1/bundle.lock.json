@@ -1,0 +1,17 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "10018d6bc3369481884c5830315b3eeb8f6c538e7ad200740b1cfecd4c8f6a68",
+    "experiment_extension/__init__.py": "4984acc8b10862e0d288a748f6804535c2675c29ffb63ddf1f488b82f1887d8d",
+    "experiment_extension/auction.py": "8339350cb97873c93c84c726579bb88fad7f77bc2f49ca543bea9c68a31113f1",
+    "experiment_extension/checks.py": "7f519c6ac7e8e36a8f6cfa1495f5f211576502bcd71e89215795353e706e5760",
+    "experiment_extension/reference.py": "3678a6c70753d2425a5ccde4fd3de95b582f8c50bd2190c7507b9459c047eebb",
+    "experiment_extension/report.py": "213c46cbd36ef71a7095fde59664bdfadb325b6625f187bcf5b0a8b7b8e81a49",
+    "experiment_extension/schemas.py": "186c695508ca91f47de270bc582996d50d558888dfebca46cfc2b7437bf415e8",
+    "job.example.json": "f9086e0a22c2b1d7fdb821d36da9ac3de84f26d540a3c16626f93919620b5066",
+    "tests/test_auction_checks.py": "f23907e4d03bd520dd241743927e0f0244b505bd34f7fb2eb32c7ccd97954245",
+    "tests/test_auction_mechanism.py": "39df365efad8a25bd230f01129bc5edbb7a960687d635a18300545e74226ccf9",
+    "tests/test_auction_reporting.py": "be7f042c6476071c2fa69125a147f79632fb6aa2b6d46389f1fecaf7458c33d3"
+  },
+  "digest": "4d332e188ad0fff1e89bd245a2963fe9c67176deb56a4ba7ce16281ab023e445"
+}

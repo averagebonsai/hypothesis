@@ -1,0 +1,67 @@
+{
+  "hypothesis": "How do two actors instructed to favor cooperation and one opportunistic actor behave around announced endowment withdrawal in a six-round public-goods game?",
+  "execution_kind": "agent_simulation",
+  "supplied_inputs": [
+    {
+      "name": "participant count",
+      "value": 3,
+      "target_path": "/world/parameters/participant_count"
+    },
+    {
+      "name": "total rounds",
+      "value": 6,
+      "target_path": "/world/parameters/rounds"
+    },
+    {
+      "name": "last endowed round",
+      "value": 3,
+      "target_path": "/world/parameters/endowed_rounds"
+    },
+    {
+      "name": "early endowment per participant per round",
+      "value": 20.0,
+      "target_path": "/world/parameters/endowment"
+    },
+    {
+      "name": "public good multiplier",
+      "value": 2.0,
+      "target_path": "/world/parameters/multiplier"
+    }
+  ],
+  "requirements": [
+    "This is a repeated agent simulation using three live LLM actors, simultaneous.v1, permission-filtered observations, private memory, the event log, and custom mechanism rules only where needed. Use MODEL for actors; Muse Code uses MODEL_CODING at max reasoning.",
+    "There are 6 simultaneous rounds, with one contribution per participant per round. All participants start at zero saved balance. Rounds 1-3 give each participant a fresh endowment of 20; rounds 4-6 give zero. The horizon and withdrawal schedule are known by all participants from the outset (user clarification).",
+    "All previous earnings are saved. At the opening of a round, available funds are prior accumulated balance plus that round's endowment. Any finite nonnegative contribution up to those available funds is legal, including above 20 and all saved funds. No borrowing against the current round's future pool payout, no debt, no arbitrary contribution cap of 20, no automatic zero contributions after withdrawal.",
+    "For N participants, round payoff_i = endowment_this_round - contribution_i + multiplier * sum(contributions)/N. Closing saved_balance_i = opening_saved_balance_i + round_payoff_i. Public-good payout occurs only after all participants commit; wealth and payoff must not be confused or double-counted. Configuration and mechanism must support varied N, horizon, withdrawal timing, endowments and multipliers, not just these literal values.",
+    "Participants know the rules and schedule, their own available/saved funds and past public round feedback. As a recorded modeling assumption, reveal each completed round's contributions and payoffs to all; never reveal simultaneous uncommitted decisions or another participant's private memory. Future balances may be inferred from public feedback. Only mechanism transitions change saved funds; policy may update its own memory, not its budget.",
+    "Compute separate mathematical reference trajectories with stated assumptions: self-interested zero contribution for the known finite-horizon textbook setting, and full reinvestment as a cooperative group-wealth reference for multiplier > 1. Do not call the cooperative trajectory a Nash equilibrium or predict that LLMs will follow either reference. Explain the marginal private return multiplier/N and its scope, and distinguish one-shot incentive arguments from assumptions for finite-horizon backward induction.",
+    "Acceptance must be deterministic/offline: verify budget rejection, finite/negative actions, positive saved-fund contributions after withdrawal, over-20 legal contributions, no double counting, aggregate wealth conservation/growth identity sum(closing balances)=sum(opening balances)+N*endowment+(multiplier-1)*sum(contributions), round indexing at the 3/4 boundary, privacy/memory and variations in accepted parameters. Include hand-derived cases independent of execution helpers; a sampled check is not a theorem proof.",
+    "Use the generic notebook writers and offline preview. Final notebook: background/rationale; executed reporting code, contribution and wealth trajectories with withdrawal marker, phase statistics and mathematical comparisons; original decision rationales once in their own section; human-readable substantive assumptions without raw config field/value dumps; limitations. Avoid repeating the full results table in prose. Code must call external modules rather than implementing economic calculations or rerunning actors in cells.",
+    "The preview covers only problem definition, mathematical references/theory and assumptions/limitations. Actual behavior and its interpretation remain pending until recorded. The final report should explain actual observed adaptation, not infer a general learned policy or a causal treatment effect from one trajectory without a control. A static LLMPolicy with history/memory is not a trained reinforcement-learning policy.",
+    "Use one live primary simulation only. Report-only corrections must re-render the saved result without more actor calls. Offline acceptance and composition tests must not call live actors. Actor budgets are supplied centrally with enough room for all rounds and configured retries. Keep all new components in the versioned experiment bundle and do not modify the main scaffold.",
+    "Use actor IDs p1, p2 and p3. Copy each typed actor_behaviors entry into the corresponding llm.v1 policy_parameters.behavior without changing it. Shared instructions should state the game rules; individual objectives and tendencies belong in the private behavior profile. Never reveal another participant's profile in observations or shared state.",
+    "Aim for 10-15 minutes end to end on this small task, with planning around two minutes and implementation around three. These are soft targets, not cutoffs. Start from the concise interface guide and starter; inspect further source only to resolve a named gap, retain prototypes between stages, and stop once required checks pass. Do not weaken tests or omit notebook explanation to meet a timing target.",
+    "The operator enables concurrent decisions within each simultaneous round. Do not implement your own thread pool, transport, persistence, timeout or retry loop. Use the trusted runtime and centralized execution settings. Keep one logical live trajectory; recover through committed-event checkpoints and the current-run response ledger, and render corrections from the saved artifact.",
+    "Actor profiles are intentionally heterogeneous. Treat cooperative and opportunistic instructions as tendencies, not enforced actions. The selfish zero-contribution reference assumes own-wealth maximization, so it is not an equilibrium prediction for actors given other preferences. State that limitation in the notebook. Profiles are private and their labels must not be revealed to others."
+  ],
+  "actor_behaviors": [
+    {
+      "actor_id": "p1",
+      "objective": "Prefer sustaining mutually beneficial cooperation while considering your final saved balance.",
+      "behavioral_instructions": "Be inclined to contribute and reciprocate observed cooperation. You may adapt if others free-ride; no fixed contribution amount is prescribed.",
+      "background": ""
+    },
+    {
+      "actor_id": "p2",
+      "objective": "Prefer sustaining mutually beneficial cooperation while considering your final saved balance.",
+      "behavioral_instructions": "Be inclined to contribute and reciprocate observed cooperation. You may adapt if others free-ride; no fixed contribution amount is prescribed.",
+      "background": ""
+    },
+    {
+      "actor_id": "p3",
+      "objective": "Maximize your own final saved balance.",
+      "behavioral_instructions": "Be opportunistic about benefiting from others' contributions. Adapt to public history and incentives; do not assume your pending choice or private instructions are visible to others. No fixed action schedule is prescribed.",
+      "background": ""
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 import importlib
 
-from agent_tools.checks import VerificationCheck, standard_checks
+from agent_tools.checks import VerificationCheck, standard_checks, verify_llm_observations
 from agent_tools.specs import BundleManifest, VerificationFinding
 from agent_tools.verification import verify_problem_result
 from simulation_core.execution import JobResult
@@ -35,7 +35,7 @@ def assess(
     from .runtime import require_container
 
     require_container()
-    findings = []
+    findings = [verify_llm_observations(artifact)]
     try:
         verify_problem_result(artifact, bundle.verification)
         findings.append(
