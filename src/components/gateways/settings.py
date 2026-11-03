@@ -1,6 +1,7 @@
 """Host-only credentials. Never include this object in simulation manifests."""
 
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 class LiveModelSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     api_key: SecretStr = Field(exclude=True)
+    actor_api_keys: tuple[SecretStr, ...] = Field(default=(), exclude=True, repr=False)
     model: str = Field(min_length=1)
 
     @classmethod
@@ -48,4 +50,22 @@ class LiveModelSettings(BaseModel):
             raise ValueError(
                 "MODEL_CODING must be muse-spark-1.3 for the requested max reasoning setup"
             )
-        return cls(api_key=SecretStr(key), model=selected)
+        keys = [key]
+        if role == "actor":
+            names = sorted(
+                {
+                    name
+                    for name in {*values, *os.environ}
+                    if re.fullmatch(r"API_KEY_(?:[2-9]|[1-9][0-9]+)", name)
+                },
+                key=lambda name: int(name.rsplit("_", 1)[1]),
+            )
+            for name in names:
+                extra = os.environ.get(name) or values.get(name)
+                if extra and extra not in keys:
+                    keys.append(extra)
+        return cls(
+            api_key=SecretStr(key),
+            model=selected,
+            actor_api_keys=tuple(SecretStr(value) for value in keys) if role == "actor" else (),
+        )

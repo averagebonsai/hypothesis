@@ -217,7 +217,10 @@ def test_independent_reference_supports_coupled_vector_constraints(target, budge
     )
 
 
-def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, artifact, tmp_path):
+@pytest.mark.parametrize("framework_failure", [False, True])
+def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(
+    plan, artifact, tmp_path, framework_failure
+):
     implementation = Implementation(
         summary="Synthetic source, never imported",
         files=(
@@ -236,7 +239,9 @@ def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, arti
             ).model_dump_json()
         )
     )
-    agent = CodingAgent(PROJECT, gateway, "fake-model", tmp_path / "audit", max_calls=8)
+    agent = CodingAgent(
+        PROJECT, gateway, "fake-model", tmp_path / "audit", max_calls=8, combined_authoring=False
+    )
 
     class FakeWorker:
         calls = 0
@@ -267,8 +272,10 @@ def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, arti
                     checks=tuple(
                         CheckResult(
                             name=name,
-                            passed=passed,
-                            exit_code=0 if passed else 1,
+                            passed=passed or (name == "regressions" and not framework_failure),
+                            exit_code=0
+                            if passed or (name == "regressions" and not framework_failure)
+                            else 1,
                             output="Synthetic transport result",
                         )
                         for name in sorted(VALIDATION_CHECKS)
@@ -287,6 +294,11 @@ def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, arti
         worker,
         progress=progress.append,
     )
+    if framework_failure:
+        assert receipt.status == "needs_review"
+        assert receipt.review.affected_contracts == ("toolkit_regressions",)
+        assert worker.calls == 1 and agent.gateway.calls == 2
+        return
     assert receipt.receipt.response.result is not None
     assert worker.calls == 5 and agent.gateway.calls == 6
     assert (tmp_path / "fresh/v1/bundle.lock.json").exists()
@@ -297,3 +309,19 @@ def test_workflow_repairs_beyond_old_limits_with_only_fake_transports(plan, arti
         == 4
     )
     assert progress
+
+
+def test_static_review_tracks_shared_component_instances_and_aliases(plan):
+    from agent_tools.planning import test_structure_issues as inspect_tests
+
+    sources = {
+        "tests/test_payload.py": """
+from experiment_extension.payload import Payload
+SHARED = Payload(value=2)
+ALIAS = SHARED
+
+def test_payload():
+    assert ALIAS.value == 2
+"""
+    }
+    assert inspect_tests(sources, plan.bundle) == []

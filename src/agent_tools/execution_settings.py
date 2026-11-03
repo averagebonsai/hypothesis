@@ -2,6 +2,7 @@
 
 from pydantic import Field
 
+from simulation_core.policy_metadata import uses_llm_envelope
 from simulation_core.types import FrozenModel, SimulationConfig
 
 
@@ -13,36 +14,51 @@ class ActorExecutionSettings(FrozenModel):
     reasoning_effort: str | None = None
     max_output_tokens: int | None = Field(default=None, gt=0)
     max_attempts: int = Field(default=2, gt=0, le=5)
-    max_total_calls: int = Field(default=48, gt=0)
-    max_calls_per_actor: int = Field(default=48, gt=0, le=100)
+    max_total_calls: int | None = Field(default=None, gt=0)
+    max_calls_per_actor: int | None = Field(default=None, gt=0)
 
-    def validate_budget(self, config: SimulationConfig) -> None:
-        """Check known schedules before provider calls, reserving configured retries."""
+    def required_calls(self, config: SimulationConfig) -> dict[str, int]:
+        """Use a static schedule or the runtime's one-action-per-actor-per-tick bound."""
         from itertools import islice
 
         from components.library import standard_registry
 
+        counts = {actor.id: 0 for actor in config.world.actors if uses_llm_envelope(actor)}
         protocol = standard_registry().protocols.get(config.protocol_id)
-        if protocol is None:
-            return  # Custom protocols require a worker/domain-specific budget check.
-        schedule = protocol(config.protocol_parameters).decision_schedule(config.world)
+        schedule = (
+            protocol(config.protocol_parameters).decision_schedule(config.world)
+            if protocol
+            else None
+        )
         if schedule is None:
-            return
-        counts = {actor.id: 0 for actor in config.world.actors if actor.policy_id == "llm.v1"}
+            return {aid: config.max_steps * self.max_attempts for aid in counts}
         for phase in islice(schedule, config.max_steps):
             for actor_id in phase.actor_ids:
                 if actor_id in counts:
                     counts[actor_id] += self.max_attempts
-        if sum(counts.values()) > self.max_total_calls:
+        return counts
+
+    def call_budgets(self, config: SimulationConfig) -> tuple[int, dict[str, int]]:
+        required = self.required_calls(config)
+        per_actor = {
+            aid: self.max_calls_per_actor or max(1, count) for aid, count in required.items()
+        }
+        return self.max_total_calls or max(1, sum(per_actor.values())), per_actor
+
+    def validate_budget(self, config: SimulationConfig) -> None:
+        counts = self.required_calls(config)
+        total, per_actor = self.call_budgets(config)
+        if sum(counts.values()) > total:
             raise ValueError(
-                f"Actor call budget requires {sum(counts.values())} calls including retries; configured total is {self.max_total_calls}"
+                f"Actor call budget requires {sum(counts.values())} calls including retries; configured total is {total}"
             )
-        if any(count > self.max_calls_per_actor for count in counts.values()):
+        if any(count > per_actor[aid] for aid, count in counts.items()):
             raise ValueError(
                 "Per-actor call budget is insufficient for the declared schedule and retries"
             )
 
     def resolve(self, config: SimulationConfig) -> SimulationConfig:
+        _, per_actor = self.call_budgets(config)
         actors = tuple(
             actor.model_copy(
                 update={
@@ -52,11 +68,11 @@ class ActorExecutionSettings(FrozenModel):
                         "reasoning_effort": self.reasoning_effort,
                         "max_output_tokens": self.max_output_tokens,
                         "max_attempts": self.max_attempts,
-                        "max_calls": self.max_calls_per_actor,
+                        "max_calls": per_actor[actor.id],
                     }
                 }
             )
-            if actor.policy_id == "llm.v1"
+            if uses_llm_envelope(actor)
             else actor
             for actor in config.world.actors
         )
@@ -68,7 +84,7 @@ class ActorExecutionSettings(FrozenModel):
         return {
             "live_actor_relay": True,
             "actor_execution": self.model_dump(mode="json"),
-            "resolution": "Operator settings replace generated llm.v1 transport fields before plan freeze; scientific instructions/personas are preserved",
+            "resolution": "Operator settings replace transport fields for llm.v1 and wrappers explicitly marked attributes.model_policy=llm.v1; scientific instructions/personas are preserved",
             "validation_network": "none",
             "live_acceptance": False,
         }

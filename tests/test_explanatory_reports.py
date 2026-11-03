@@ -146,3 +146,52 @@ def test_executed_rationales_are_once_per_actor_turn_not_substring_matches(tmp_p
     cell["outputs"].append(cell["outputs"][0])
     with pytest.raises(ValueError, match="once per decision"):
         validate_explanatory_notebook(json.dumps(data), artifact, executed=True)
+
+
+def test_cumulative_reference_compares_like_units_instead_of_last_round(artifact, monkeypatch):
+    from simulation_core.reports import display_results
+    from simulation_core.types import Action, Event, Outcome
+
+    actor = artifact.manifest.simulation.world.actors[0].id
+    initialized = Event(
+        sequence=0,
+        kind="initialized",
+        state=artifact.result.final_state.model_copy(update={"tick": 0}),
+    )
+    original = Event(
+        sequence=1,
+        kind="committed",
+        state=initialized.state.model_copy(update={"tick": 1}),
+        actions=(Action(actor_id=actor, kind="submit", payload={"value": 1.0}),),
+        outcome=Outcome(payoffs={actor: 2.0}),
+    )
+    first = original
+    second = original.model_copy(
+        update={
+            "sequence": 2,
+            "state": original.state.model_copy(update={"tick": 2}),
+            "outcome": Outcome(payoffs={actor: 3.0}),
+        }
+    )
+    data = artifact.model_copy(
+        update={
+            "result": artifact.result.model_copy(update={"events": (initialized, first, second)})
+        }
+    )
+    outputs = []
+    monkeypatch.setattr("IPython.display.display", outputs.append)
+    display_results(
+        data,
+        (
+            ReportReference(
+                name="Total reference",
+                explanation="Cumulative total",
+                payoffs={actor: 4.0},
+                payoff_basis="cumulative",
+            ),
+        ),
+    )
+    html = outputs[0].data
+    assert "Cumulative payoff" in html
+    # Final row: round payoff 3, cumulative payoff 5, reference 4, difference +1.
+    assert "<td>3</td><td>5</td><td>—</td><td>4</td><td>1</td>" in html

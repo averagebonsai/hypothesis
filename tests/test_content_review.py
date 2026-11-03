@@ -56,7 +56,9 @@ def test_budget_counts_all_rounds_and_reserves_retries(plan):
         }
     )
     with pytest.raises(ValueError, match="requires 100"):
-        ActorExecutionSettings(model="model").validate_budget(config)
+        ActorExecutionSettings(model="model", max_total_calls=48).validate_budget(config)
+    ActorExecutionSettings(model="model").validate_budget(config)
+    assert ActorExecutionSettings(model="model").call_budgets(config)[0] == 100
     ActorExecutionSettings(model="model", max_total_calls=100).validate_budget(config)
 
 
@@ -99,7 +101,12 @@ def test_content_repair_keeps_original_simulation_and_does_not_call_actors_again
         ).model_dump_json()
 
     agent = CodingAgent(
-        PROJECT, FakeGateway(respond), "fake", tmp_path / "audit", content_review=True
+        PROJECT,
+        FakeGateway(respond),
+        "fake",
+        tmp_path / "audit",
+        content_review=True,
+        combined_authoring=False,
     )
 
     class Worker:

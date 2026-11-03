@@ -1,0 +1,16 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "5e8c327b855939d0b320383ea9255782558e135cf5371b4146e873806990f94c",
+    "experiment_extension/__init__.py": "c2b5fd2c7d1b517247f9d3b5c22c956adf6138e1ce2907c0f25053242c2d3e7a",
+    "experiment_extension/mechanism.py": "a182ebe40fbdc4a8c456f7856e25b626cc35f11f3d817bbef911c24edc4e94b8",
+    "experiment_extension/references.py": "d3a9fd0ab9325a25bfb1cc53165fbfa541a67a245c1b9b991a9d7fb43ae2e088",
+    "experiment_extension/report.py": "1bb209647fc7968b74b98cb8cb643b3bf1069575a5784fdf6822eee79f5522f8",
+    "job.example.json": "5be19fc338565d3d4762092710f513b8f3597015e53f1eb9863108d7f28ce075",
+    "tests/test_mechanism.py": "d7daf2c851f276fbebf94feda2469fa83a25f3130ee3748e9c9a063f981bc1f5",
+    "tests/test_privacy.py": "a34bc928495d0aeb894da428c76a98dc8ffdab05e8cd7fbd4e7dab16042fc0d6",
+    "tests/test_references.py": "975bb71e13ff7a4af98e678db5875a396735fca831411130810c4ee1f4810f8a",
+    "tests/test_reporting.py": "d940667c156c11a6c4d5376cca3b506e10665727c2cc5ec36daa434ec86ccbe0"
+  },
+  "digest": "bb2a692520aed43330a91b64715c642f4e7b28d9f23e76c0196637d7d85d2efe"
+}

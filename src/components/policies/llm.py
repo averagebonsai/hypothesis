@@ -22,7 +22,7 @@ class LLMParameters(FrozenModel):
     reasoning_effort: str | None = None
     required_fields: list[str] = Field(default_factory=list)
     max_attempts: int = Field(default=2, gt=0, le=5)
-    max_calls: int = Field(default=4, gt=0, le=100)
+    max_calls: int = Field(default=4, gt=0)
     max_output_tokens: int | None = Field(default=None, gt=0)
 
 

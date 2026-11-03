@@ -113,23 +113,29 @@ class DockerWorker:
 
     def prepare(self) -> dict[str, str]:
         """Build only trusted framework/locked dependencies, without extension files."""
-        if self.sandbox:
-            space = bounded_command(
-                [self.sbx, "exec", self.sandbox, "df", "-Pk", "/var/lib/docker"],
-                seconds=30,
-                max_bytes=10000,
-            )
-            if space.code:
-                raise RuntimeError("Cannot check worker disk space before image build")
-            available_kb = int(space.stdout.strip().splitlines()[-1].split()[3])
-            if available_kb < 1_500_000:
-                raise RuntimeError(
-                    "Docker worker needs at least 1.5 GB free before building; reclaim unused image/build cache, preserving experiment files"
-                )
         with TemporaryDirectory(prefix="hypothesis-build-") as temporary:
             context = Path(temporary) / "context"
             digest = copy_trusted_context(self.project, context)
             tag = f"hypothesis-worker:{digest[:20]}"
+            try:
+                cached = self.image_id(tag)
+            except RuntimeError:
+                pass
+            else:
+                return {"image_id": cached, "framework_digest": digest}
+            if self.sandbox:
+                space = bounded_command(
+                    [self.sbx, "exec", self.sandbox, "df", "-Pk", "/var/lib/docker"],
+                    seconds=30,
+                    max_bytes=10000,
+                )
+                if space.code:
+                    raise RuntimeError("Cannot check worker disk space before image build")
+                available_kb = int(space.stdout.strip().splitlines()[-1].split()[3])
+                if available_kb < 1_500_000:
+                    raise RuntimeError(
+                        "Docker worker needs at least 1.5 GB free before building; reclaim unused image/build cache, preserving experiment files"
+                    )
             build_path = str(context)
             remote = f"/tmp/hypothesis-build-{uuid4().hex}"
             try:
@@ -368,10 +374,10 @@ class DockerWorker:
                     DecisionLedger(
                         self.actor_gateway,
                         recovery / "responses",
-                        max_calls=self.actor_settings.max_total_calls
+                        max_calls=self.actor_settings.call_budgets(job.simulation)[0]
                         if self.actor_settings
                         else 48,
-                        max_calls_per_actor=self.actor_settings.max_calls_per_actor
+                        max_calls_per_actor=self.actor_settings.call_budgets(job.simulation)[1]
                         if self.actor_settings
                         else 48,
                     )

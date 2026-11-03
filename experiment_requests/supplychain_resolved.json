@@ -1,0 +1,200 @@
+{
+  "schema_version": "experiment.request.v1",
+  "hypothesis": "How do decentralized LLM-driven supply-chain participants respond to a flood, and what production, service, cost and recovery bottlenecks emerge over nine days?",
+  "execution_kind": "agent_simulation",
+  "problem": null,
+  "supplied_inputs": [
+    {
+      "name": "horizon_days",
+      "value": 9,
+      "target_path": "/world/parameters/horizon_days",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "capacity_schedule",
+      "value": [
+        {
+          "start_day": 1,
+          "end_day": 2,
+          "capacity": 200
+        },
+        {
+          "start_day": 3,
+          "end_day": 6,
+          "capacity": 80
+        },
+        {
+          "start_day": 7,
+          "end_day": 9,
+          "capacity": 200
+        }
+      ],
+      "target_path": "/world/parameters/capacity_schedule",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "initial_manufacturer_components",
+      "value": {
+        "A": 150,
+        "B": 150
+      },
+      "target_path": "/world/parameters/initial_manufacturer_components",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "initial_supplier_inventory",
+      "value": {
+        "supplier_a": 200,
+        "supplier_b": 200
+      },
+      "target_path": "/world/parameters/initial_supplier_inventory",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "supplier_daily_capacity",
+      "value": {
+        "supplier_a": 100,
+        "supplier_b": 100
+      },
+      "target_path": "/world/parameters/supplier_daily_capacity",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "manufacturer_daily_capacity",
+      "value": 100,
+      "target_path": "/world/parameters/manufacturer_daily_capacity",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "daily_demand",
+      "value": 80,
+      "target_path": "/world/parameters/daily_demand",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "initial_finished_goods",
+      "value": 0,
+      "target_path": "/world/parameters/initial_finished_goods",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "transit_days",
+      "value": 1,
+      "target_path": "/world/parameters/transit_days",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "finished_selling_price",
+      "value": 100.0,
+      "target_path": "/world/parameters/finished_selling_price",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "component_prices",
+      "value": {
+        "A": 20.0,
+        "B": 20.0
+      },
+      "target_path": "/world/parameters/component_prices",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "supplier_unit_production_cost",
+      "value": {
+        "supplier_a": 12.0,
+        "supplier_b": 12.0
+      },
+      "target_path": "/world/parameters/supplier_unit_production_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "assembly_unit_cost",
+      "value": 15.0,
+      "target_path": "/world/parameters/assembly_unit_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "transport_unit_charge",
+      "value": 5.0,
+      "target_path": "/world/parameters/transport_unit_charge",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "transport_unit_operating_cost",
+      "value": 3.0,
+      "target_path": "/world/parameters/transport_unit_operating_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "manufacturer_component_holding_unit_cost",
+      "value": 1.0,
+      "target_path": "/world/parameters/manufacturer_component_holding_unit_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "supplier_holding_unit_cost",
+      "value": 0.5,
+      "target_path": "/world/parameters/supplier_holding_unit_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "finished_goods_holding_unit_cost",
+      "value": 2.0,
+      "target_path": "/world/parameters/finished_goods_holding_unit_cost",
+      "source_reference": "experiment_requests/supplychain.md"
+    },
+    {
+      "name": "phase transition budget",
+      "value": 36,
+      "target_path": "/max_steps",
+      "source_reference": "Derived: nine days times four decision phases"
+    }
+  ],
+  "requirements": [
+    "USER CLARIFICATION OVERRIDES THE ORIGINAL DOCUMENT: run only the decentralized scenario, ONE live trajectory, NINE days/rounds. Do not implement/run a coordinated scenario or five replications. Ignore the original Round-12 reporting horizon. Keep the requested capacities: 200 in days 1-2, 80 in days 3-6, 200 in days 7-9.",
+    "## 2. Simulation Environment\n\nSimulate a supply chain over **9 rounds**, with each round representing one day.\n\nThere are four organizations:\n\n1. One manufacturer.\n2. Supplier A.\n3. Supplier B.\n4. One logistics provider.\n\nThe manufacturer produces finished electronic products using components supplied by both suppliers.\n\nEach finished product requires:\n\n- One unit of Component A, supplied exclusively by Supplier A.\n- One unit of Component B, supplied exclusively by Supplier B.\n\nProduction cannot occur unless both components are available.\n\n### Initial conditions\n\n| Variable | Initial value |\n|---|---:|\n| Manufacturer inventory — Component A | 150 units |\n| Manufacturer inventory — Component B | 150 units |\n| Supplier A initial inventory | 200 units |\n| Supplier B initial inventory | 200 units |\n| Supplier A daily production capacity | 100 units |\n| Supplier B daily production capacity | 100 units |\n| Manufacturer daily production capacity | 100 finished products |\n| Customer demand | 80 finished products per day |\n| Normal logistics capacity | 200 component units per day |\n| Disrupted logistics capacity | 80 component units per day |\n| Manufacturer finished-goods inventory | 0 units |\n\nThe flood occurs at the beginning of Round 3.\n\n- Rounds 1–2: Normal logistics capacity.\n- Rounds 3–6: Logistics capacity reduced to 80 units per day.\n- Rounds 7–9: Logistics capacity restored to 200 units per day.\n\nThese values are hypothetical and should be treated as experimental assumptions.\n\n### Transportation\n\nAll component shipments use the shared logistics provider.\n\nTransportation capacity is measured in individual component units, not finished-product equivalents.\n\nFor example, shipping 50 units of Component A and 50 units of Component B consumes 100 units of logistics capacity.\n\nAll shipments have a one-round transit delay. A shipment dispatched in Round 3 arrives at the beginning of Round 4.\n\nThe logistics provider cannot exceed its daily shipping capacity.\n\nUnshipped components remain at their respective suppliers.\n\n",
+    "## 3. Actors and Decision-Making\n\nEach actor has its own objective, action space, private information, and observation rules.\n\n### Actor 1 — Manufacturer\n\n**Objective:** Maximize fulfilled customer demand while minimizing inventory holding costs, procurement costs, and production disruptions.\n\n**Available actions:**\n\n- Submit an order quantity to Supplier A.\n- Submit an order quantity to Supplier B.\n- Choose the number of finished products to manufacture.\n- Request transportation priority for specific shipments.\n\n**Private information:**\n\n- Current component inventory.\n- Finished-goods inventory.\n- Customer demand.\n- Outstanding orders.\n- Internal production capacity.\n- Accumulated costs and unmet demand.\n\n**Public information:**\n\n- Published transportation capacity.\n- Disruption status.\n- Confirmed shipment arrivals.\n- Supplier delivery commitments.\n\nThe manufacturer does not automatically know suppliers' true inventories or production capacities in the decentralized scenario.\n\n### Actor 2 — Supplier A\n\n**Objective:** Maximize revenue from fulfilled orders while minimizing production, inventory holding, and unfulfilled-order costs.\n\n**Available actions:**\n\n- Choose daily production quantity.\n- Accept or partially fulfill manufacturer orders.\n- Submit available shipment quantities to the logistics provider.\n- Request transportation priority.\n\n**Private information:**\n\n- Current Component A inventory.\n- Production capacity.\n- Production cost.\n- Outstanding orders.\n- Accumulated profit.\n\nSupplier A does not observe Supplier B's inventory, production decisions, or outstanding orders in the decentralized scenario.\n\n### Actor 3 — Supplier B\n\nSupplier B has the same action types and objective structure as Supplier A, but controls Component B.\n\nIts operational state is independent of Supplier A.\n\nSupplier B cannot observe Supplier A's private information unless information sharing is enabled.\n\n### Actor 4 — Logistics Provider\n\n**Objective:** Maximize completed deliveries and transportation revenue while minimizing unused capacity, transportation costs, and unfulfilled shipment requests.\n\n**Available actions:**\n\n- Allocate available shipping capacity between Supplier A and Supplier B.\n- Accept or defer shipment requests.\n- Prioritize shipments according to its decision policy.\n\n**Private information:**\n\n- Current shipment requests.\n- Transportation capacity.\n- Pending shipments.\n- Transportation operating costs.\n\nThe logistics provider does not automatically know the manufacturer's internal inventory or customer demand in the decentralized scenario.\n\n",
+    "## 4. Information Sharing Intervention\n\nThe primary intervention is the information available to each actor.\n\n### Scenario A — Decentralized\n\nActors observe only their own private operational information and explicitly communicated orders, commitments, and shipment confirmations.\n\nThey cannot access other organizations' private inventories, costs, or production decisions.\n\n",
+    "## 5. Physical and Economic Constraints\n\nThe simulation must enforce the following constraints.\n\n### Inventory conservation\n\nInventory cannot become negative.\n\nFor each supplier:\n\nEnding inventory = Starting inventory + Production − Components dispatched.\n\nFor the manufacturer:\n\nEnding component inventory = Starting inventory + Arriving shipments − Components consumed in production.\n\n### Production constraints\n\nSupplier production cannot exceed available daily production capacity.\n\nManufacturer production cannot exceed daily production capacity or available component inventory.\n\nEach finished product consumes exactly one unit of Component A and one unit of Component B.\n\n### Transportation constraints\n\nTotal dispatched components cannot exceed the logistics provider's daily capacity.\n\nShipments cannot exceed components physically available for dispatch.\n\nA shipment cannot arrive before its scheduled arrival round.\n\n### Demand fulfillment\n\nThe manufacturer can fulfill customer demand using finished goods produced during the current round and any existing finished-goods inventory.\n\nUnfulfilled customer demand is recorded as lost sales rather than carried forward.\n\n### Accounting constraints\n\nAll inventory, production, shipments, costs, revenues, and profits must be calculated from actual committed state transitions.\n\nActors cannot create inventory, transportation capacity, or financial resources through their decisions.\n\n",
+    "## 6. Economic Parameters\n\nUse the following hypothetical values:\n\n| Parameter | Value |\n|---|---:|\n| Finished-product selling price | $100 |\n| Component A procurement price | $20/unit |\n| Component B procurement price | $20/unit |\n| Supplier A production cost | $12/unit |\n| Supplier B production cost | $12/unit |\n| Manufacturer assembly cost | $15/product |\n| Logistics transportation charge | $5/component unit |\n| Logistics operating cost | $3/component unit |\n| Manufacturer component holding cost | $1/unit/day |\n| Supplier inventory holding cost | $0.50/unit/day |\n| Manufacturer finished-goods holding cost | $2/unit/day |\n\nUse consistent accounting conventions.\n\nProcurement and logistics charges should be recognized when components are dispatched, while the manufacturer's assembly costs should be recognized when finished products are produced.\n\nSupplier revenue is earned on dispatched components.\n\nThe manufacturer earns revenue only from finished products sold to customers.\n\nDo not double-count transfers when calculating total supply-chain profit. Consolidated profit should exclude internal transfers between participating organizations.\n\n",
+    "## 7. Round Structure\n\nEach round represents one day and follows a fixed sequence.\n\n**Phase 1 — State update**\n\n- Deliver shipments scheduled to arrive at the beginning of the round.\n- Apply the current day's transportation capacity.\n- Update the publicly known disruption status.\n- Generate each actor's permitted observation.\n\n**Phase 2 — Manufacturer decisions**\n\nThe manufacturer submits component orders and requested shipment priorities.\n\n**Phase 3 — Supplier decisions**\n\nSuppliers observe the orders they received.\n\nEach supplier chooses production quantity, order fulfillment quantity, and shipment requests.\n\nSupplier decisions occur simultaneously, without visibility into the other supplier's current uncommitted actions.\n\n**Phase 4 — Logistics decisions**\n\nThe logistics provider observes submitted shipment requests and allocates the available transportation capacity.\n\nIt cannot allocate more than the requested quantity or available shipping capacity.\n\n**Phase 5 — Dispatch and production**\n\n- Dispatch accepted component shipments.\n- Deduct dispatched quantities from supplier inventories.\n- Schedule shipments for arrival in the next round.\n- The manufacturer chooses and executes production using components currently in its inventory.\n- Finished products become available for sale during the same round.\n\n**Phase 6 — Customer demand and accounting**\n\n- Fulfill customer demand using available finished products.\n- Record lost sales.\n- Calculate revenues, costs, profits, and inventory balances.\n- Commit the updated world state.\n- Append actions and outcomes to the event log.\n\nThe round ends after all state changes and accounting calculations are complete.\n\n",
+    "## 8. Actor Policies\n\nUse LLM-driven policies for all four organizations.\n\nEach actor receives a role-specific observation containing:\n\n- Its objective.\n- Its available actions.\n- Its permitted operational information.\n- Its own past decisions and outcomes.\n- The current round number.\n\nThe LLM must return structured actions conforming to the actor's Pydantic action schema.\n\nThe runtime must validate all actions before committing them.\n\nIf an actor proposes an infeasible action, reject it and request a corrected action within a fixed retry budget. If retries are exhausted, apply an explicitly documented safe fallback, such as zero production or zero shipment allocation, and record the failure.\n\nDo not permit actors to modify the world state directly.\n\n",
+    "Record all primary/secondary metrics from section 9: units sold; lost sales; consolidated profit; days production below demand; recovery after restoration; per-actor/component inventory; unused logistics capacity; supplier utilization; shipment delays; actor profits; A/B allocation imbalance. Stable fulfillment means three consecutive days with zero lost sales after restoration. Report the streak start and confirmation day, and lag of start from restoration. If no such streak is confirmed by day 9, report recovery not observed within the horizon; never extrapolate later days.",
+    "Notebook: background/rationale; executed reporting code with disruption/capacity timeline, sales versus demand, manufacturer A/B inventories, transport utilization, cumulative consolidated profit, role/decision consequences and mathematical checks where supported; original decision rationales once; assumptions in prose; limitations. No coordinated-versus-decentralized result or replication consistency claim is possible here because only this baseline runs. Clearly mark those research comparisons untested. A physical bound, if rigorously derived, is a mathematical reference, not another LLM scenario or a causal coordination effect.",
+    "## 11. Implementation Requirements\n\nUse the existing simulation toolkit and extension-development SOP.\n\nBefore implementing:\n\n- Identify which components can be reused.\n- Identify missing capabilities.\n- Propose the smallest necessary extensions.\n- Document mathematical and behavioral assumptions.\n- Generate software, mathematical, and integration tests.\n\nDo not modify the trusted simulation runtime or parent interfaces.\n\nAny newly generated components must implement the appropriate existing interfaces.\n\nRun generated code inside the configured isolated execution environment.\n\nPreserve the extension specifications, tests, validation reports, simulation configurations, event logs, and results.\n\n",
+    "## 12. Required Validation\n\nAt minimum, test:\n\n- Inventory conservation.\n- Production capacity constraints.\n- Transportation capacity constraints.\n- Shipment timing.\n- Demand fulfillment and lost-sales accounting.\n- Financial accounting consistency.\n- Simultaneous supplier information boundaries.\n- Scenario-specific information access.\n- Deterministic mechanism behavior for fixed action sequences.\n- Correct application of the flood disruption.\n- Correct recovery of transportation capacity.\n- No changes to the trusted runtime.\n\nAlso test boundary cases, including zero transport capacity, empty inventories, and shipment requests exceeding available capacity.\n\n",
+    "Every primary role must use MODEL through LLMPolicy or a declared experiment-local wrapper preserving its canonical input observation and ModelCallRecord contract. No hardcoded orders, production or allocations as the primary policy. Use sequential.v1 with one manufacturer-order phase, one joint supplier phase, one logistics phase and one manufacturer-production/settlement phase per day: 36 phases and 45 primary decisions. Each active actor takes one structured action per phase. Reuse the trusted core, filtered observations, model gateway relay, recording and reporting; put missing domain rules, payloads, contextual policy validation/fallback and checks in the versioned bundle. No trusted runtime or abstract parent changes.",
+    "For a custom LLM wrapper set Actor.attributes.model_policy=\"llm.v1\" so central MODEL, retries, budgets, typed behavior preservation and privacy audit apply. Preserve the LLMPolicy input observation byte-for-byte semantically; put any retry feedback outside that observation. It can override response_model to validate context-sensitive payload constraints using only the permitted observation. Actor.attributes.safe_fallback_actions must explicitly map each action kind to its exact zero-production/zero-order/zero-allocation payload. Exhaust the configured two attempts before fallback, retain failed calls and a clear fallback rationale; instrument fallback counts and proposed infeasible actions. The mechanism must independently enforce physical legality. Never silently clamp an infeasible action into a different LLM choice.",
+    "Mechanism transitions own operational private facts, profits and each role's own committed history. Disable policy-originated memory/private writes in this experiment where they would conflict with mechanism private updates, and return memory_update=null and private_updates=[]; supply owner-only past decisions/outcomes through private facts. Never use the global event log or unfiltered WorldState as a policy observation. Target orders, commitments and dispatch notices to authorized recipients; no cross-supplier private information or shared operational dashboard.",
+    "MODELING ASSUMPTION: the finite nine-day horizon is known, but advance flood/recovery dates and the full capacity schedule are not announced to actors. They observe current capacity/status and past permitted feedback as changes occur. Do not paste the entire request, parameter dictionary, other roles' private costs/inventories, or future capacity schedule into actor prompts. Record this assumption explicitly.",
+    "MODELING CONVENTIONS where the document leaves details open: quantities count integer units; orders are incremental and outstanding unshipped orders persist without duplicating new orders. A supplier acceptance/offer is a same-day commitment; only actual dispatch reduces its order backlog and stock. Unshipped offered stock remains at the supplier. The manufacturer pays both procurement and logistics at dispatch, suppliers earn procurement revenue and logistics earns its charge then. Opening stock acquisition/production costs are sunk before the horizon, no opening-stock revaluation or terminal salvage is included, and holding costs apply to closing on-hand stock (not in-transit stock). No cash/borrowing constraint or numeric shortage/backlog penalty is supplied: do not invent one; track service/backlog KPIs and retain qualitative role objectives. Record these conventions as assumptions in configuration/report.",
+    "All arrays/counters and financial results must derive from actual committed transitions. Preserve component conservation across supplier stock, manufacturer stock, consumption and in-transit stock; final-day dispatches remain in transit beyond the horizon. Customer demand is lost sales, never backlog. Consolidated operating profit equals final consumer revenue minus real production, assembly, transport operating and holding costs; procurement and transport fee transfers cancel across the four organizations. Test separately hand-derived day cases and multi-day fixed-action sequences, arrival timing at day+1, day-3 and day-7 capacity boundaries, private observations, infeasible correction/fallback and every supplied numerical parameter. Independent audits should check identities and loss/cash flows, not just reuse the transition helper as an oracle.",
+    "Use the combined author_candidate workflow and executable generic starter only as an interface example. Write a short gap analysis then the complete domain candidate with tests and notebook generators; run author-check, repair named failures, and finish. Aim for an offline-validated candidate near five minutes but do not weaken coverage. MODEL_CODING powers Muse Code at max reasoning; MODEL powers actors. Central settings use a pool of all host-provided keys, streaming, concurrent suppliers and no generation-token ceiling. Offline tests/preview must not call live actors. Exactly one live primary trajectory is authorized; report-only fixes use saved results."
+  ],
+  "actor_behaviors": [
+    {
+      "actor_id": "manufacturer",
+      "objective": "Maximize fulfilled customer demand while minimizing inventory holding and procurement costs and production disruptions.",
+      "behavioral_instructions": "Use only your own inventory, demand, orders, capacity and accounting, plus explicitly communicated commitments and shipment confirmations. Request orders/priorities in the ordering phase and production in the later manufacturing phase; no premature use of in-transit components.",
+      "background": ""
+    },
+    {
+      "actor_id": "supplier_a",
+      "objective": "Maximize revenue earned on actual dispatched Component A while minimizing production, holding and unfulfilled-order costs.",
+      "behavioral_instructions": "Control only Component A. Use your own inventory/capacity/costs/backlog and received orders. Do not observe Supplier B's inventory, production decisions or order backlog. Priorities are requests, not guaranteed allocations.",
+      "background": ""
+    },
+    {
+      "actor_id": "supplier_b",
+      "objective": "Maximize revenue earned on actual dispatched Component B while minimizing production, holding and unfulfilled-order costs.",
+      "behavioral_instructions": "Control only Component B. Use your own inventory/capacity/costs/backlog and received orders. Do not observe Supplier A's inventory, production decisions or order backlog. Priorities are requests, not guaranteed allocations.",
+      "background": ""
+    },
+    {
+      "actor_id": "logistics",
+      "objective": "Maximize completed deliveries and transport revenue while minimizing unused capacity, operating costs and unfulfilled shipment requests.",
+      "behavioral_instructions": "Use submitted shipment requests/priorities, current transport capacity, your pending shipments and own costs. Do not observe the manufacturer's inventory or demand, or suppliers' true inventories/production/costs. Allocate no more than offers and aggregate capacity.",
+      "background": ""
+    }
+  ]
+}

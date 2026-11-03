@@ -94,7 +94,9 @@ def test_review_is_terminal_before_another_model_or_worker_call(tmp_path):
     gateway = FakeGateway(
         lambda request: PlanningResponse(plan=None, review=review).model_dump_json()
     )
-    agent = CodingAgent(PROJECT, gateway, "fake-model", tmp_path / "audit", max_calls=2)
+    agent = CodingAgent(
+        PROJECT, gateway, "fake-model", tmp_path / "audit", max_calls=2, combined_authoring=False
+    )
 
     class NoWorker:
         def execute(self, *args, **kwargs):

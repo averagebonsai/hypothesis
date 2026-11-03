@@ -47,6 +47,27 @@ def test_structure_issues(sources: dict[str, str], manifest: BundleManifest) -> 
                     for alias in node.names
                     if alias.name in modules
                 )
+        # Shared instances/class aliases are normal pytest style. Follow their
+        # constructor dependencies instead of forcing repetitive imports/calls.
+        changed = True
+        while changed:
+            before = set(imports)
+            for assignment in tree.body:
+                if isinstance(assignment, (ast.Assign, ast.AnnAssign)):
+                    value = assignment.value
+                    if value is None:
+                        continue
+                    targets = (
+                        assignment.targets
+                        if isinstance(assignment, ast.Assign)
+                        else [assignment.target]
+                    )
+                    references = {item.id for item in ast.walk(value) if isinstance(item, ast.Name)}
+                    if references & imports:
+                        imports.update(
+                            target.id for target in targets if isinstance(target, ast.Name)
+                        )
+            changed = imports != before
         functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
 
         def exercises_component(
@@ -69,6 +90,14 @@ def test_structure_issues(sources: dict[str, str], manifest: BundleManifest) -> 
                     call = call.value
                 if isinstance(call, ast.Name):
                     roots.add(call.id)
+            for attribute in (
+                node for node in ast.walk(function) if isinstance(node, ast.Attribute)
+            ):
+                root = attribute.value
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                if isinstance(root, ast.Name):
+                    roots.add(root.id)
             return bool(roots & imports) or any(
                 exercises_component(helper, visited | {name}, functions=functions, imports=imports)
                 for helper in names & functions.keys()
@@ -113,7 +142,12 @@ def schema_claim_issues(manifest: BundleManifest) -> tuple[str, ...]:
 
 
 def review_plan(
-    project: Path, request: ExperimentRequest, experiment_id: str, plan: "CodingPlan"
+    project: Path,
+    request: ExperimentRequest,
+    experiment_id: str,
+    plan: "CodingPlan",
+    *,
+    lint_tests: bool = True,
 ) -> tuple[str, ...]:
     if request.execution_kind != "auto" and plan.kind != request.execution_kind:
         return ("Authoring route contradicts the user's requested execution kind",)
@@ -139,7 +173,7 @@ def review_plan(
             issues.append(
                 "Simulation notebook generators require a simulation; direct tools may provide a separate reporting utility"
             )
-        return tuple(issues) + review_tests(project, plan)
+        return tuple(issues) + review_tests(project, plan, lint=lint_tests)
 
     try:
         manifest = plan.bundle
@@ -316,10 +350,10 @@ def review_plan(
                 issues.append(
                     "This supported single-objective continuous benchmark requires the independent numerical reference"
                 )
-    return tuple(issues) + review_tests(project, plan)
+    return tuple(issues) + review_tests(project, plan, lint=lint_tests)
 
 
-def review_tests(project: Path, plan: "CodingPlan") -> tuple[str, ...]:
+def review_tests(project: Path, plan: "CodingPlan", *, lint: bool = True) -> tuple[str, ...]:
     from .authoring import safe_source_path
 
     issues: list[str] = []
@@ -332,6 +366,8 @@ def review_tests(project: Path, plan: "CodingPlan") -> tuple[str, ...]:
     issues.extend(test_structure_issues(sources, manifest))
     for path, content in sources.items():
         issues.extend(fixture_issues(content, path))
+    if not lint:
+        return tuple(issues)
     with TemporaryDirectory(prefix="authoring-plan-") as temporary:
         root = Path(temporary)
         for path, content in sources.items():

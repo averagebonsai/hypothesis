@@ -59,6 +59,17 @@ for independently derived examples, rejection/boundary cases and parameter varia
 No scaffold edits. Scientific data belongs in native typed configuration, not JSON strings.
 Use FrozenModel.from_json_values / agent_tools.fixtures at JSON/tuple boundaries.
 No live actor calls in acceptance tests. The primary run is the live integration check.
+Wrappers that preserve LLMPolicy's parameters and canonical observation packet may
+set Actor.attributes.model_policy='llm.v1'. Central budgets, model resolution, behavior
+bindings and privacy auditing then cover that wrapper. It can override response_model
+with observation-dependent Pydantic validation without reading WorldState. Keep the
+observation packet canonical; correction feedback belongs outside that packet.
+For exhausted retries, declare Actor.attributes.safe_fallback_actions as an explicit
+map of action kind to exact safe payload. A fallback needs an exhausted failed-call
+trace and a nonempty explanation; it must pass mechanism legality like every action.
+If a mechanism updates an actor's private state, avoid simultaneous policy private/
+memory writes for that actor. Disable writable memory and supply owner-only history
+as mechanism-owned private facts when appropriate; never bypass the conflict guard.
 Operator actor_execution settings centrally resolve model/reasoning/token/retry settings;
 author only scientific actor instructions/personas/required observation fields.
 For request.actor_behaviors, copy each ActorBehaviorSpec unchanged into that actor's
@@ -86,7 +97,26 @@ Use assumption_prose for human explanations without raw config values or field l
 Interpret causes/incentives and aggregate changes; do not enumerate every actor's
 action/valuation/payoff a second time. Source config remains in provenance files.
 
+## Single-pass authoring
+Write a short gap analysis and a complete candidate together: draft.json, ordinary
+experiment_extension/*.py, tests/*.py and summary.txt. Adapt the executable synthetic
+starter; its signals, objective and scripted actors are examples, not the user's rules.
+For requested LLM simulations use llm.v1 and the supplied private behavior profiles.
+Do not write a prototype for a later implementation handoff. Preserve passing work.
+Bundle namespace/version, source lists and test names are collected automatically.
+Use component_id(experiment_id, kind, symbol_name) from agent_tools.workspace for IDs.
+A component may declare test_groups=[{file, category, expected, reference}]; names are
+read from that file. Expectations and independent grounding must still be authored.
+No scientific rule, reference expectation or guarantee is inferred from file names.
+
 ## Validation and completion
+Run `author-check` in the authoring container. It normalizes imports/formatting, checks
+metadata, lint, types, tests, composition and the offline preview, then writes response.json
+only when all gates pass. Its .author-check/report.json names failures and timings.
+Use --only SECTION to repair named failures; unchanged passing gates are reused.
+The cache is keyed by source, configuration and toolkit inputs; changed dependencies
+invalidate it. No live relay is opened. Independent controller checks still run.
+The following individual commands remain available for diagnosis:
 Ruff: ruff check --config /opt/toolkit/pyproject.toml --no-cache experiment_extension tests
 Types: mypy --config-file /opt/toolkit/pyproject.toml --cache-dir /tmp/mypy experiment_extension
 Tests: PYTHONPATH=/workspace:/opt/toolkit/src python -m pytest -q -p no:cacheprovider
@@ -96,11 +126,10 @@ Finish once the stage contract validates, relevant checks pass, and the notebook
 checklist is satisfied. Additional calls must address a named unresolved issue; do not
 keep rechecking unchanged passing files or polish indefinitely. There is no turn cap.
 The controller separately runs offline preview, acceptance/regression and the one live run.
-For small simulations aim for roughly two minutes planning and three minutes implementation,
-within a 10-15 minute total target. These are soft targets, not deadlines or turn caps.
-Write the minimal coherent plan and independently grounded tests, assemble and move on.
-Avoid implementing a full prototype during planning unless needed to resolve a named gap.
-Keep any necessary prototype for implementation; avoid speculative extra abstractions.
+For small supported tasks, target a complete offline-validated candidate in about
+five minutes, within a 10-15 minute total target. These are targets to measure,
+not deadlines or turn caps. Complete the smallest coherent candidate and move on.
+Complete code and tests in the same pass; avoid speculative extra abstractions.
 
 The Muse session, workspace and discoveries persist across this experiment's stages.
 Read current stage inputs/feedback; reuse earlier decisions and notes rather than
@@ -138,65 +167,14 @@ def interface_guide() -> str:
     return "".join(parts)
 
 
-MECHANISM = '''"""Template only: implement missing rules, or delete if reusing a mechanism."""
-from collections.abc import Sequence
+def write_starter(
+    directory: Path, *, kind: str = "agent_simulation", experiment_id: str = "starter"
+) -> None:
+    from .starter import starter_files
 
-from simulation_core.mechanism import Mechanism
-from simulation_core.types import Action, Outcome, TransitionResult, WorldConfig, WorldState
-
-
-class CustomMechanism(Mechanism):
-    def validate_config(self, config: WorldConfig) -> None:
-        raise NotImplementedError("Validate typed parameters and supported actors")
-
-    def validate_state(self, config: WorldConfig, state: WorldState) -> None:
-        raise NotImplementedError("Check state invariants")
-
-    def validate_actions(self, config: WorldConfig, state: WorldState, actions: Sequence[Action]) -> None:
-        raise NotImplementedError("Check complete active profile and domain legality")
-
-    def evaluate(self, config: WorldConfig, state: WorldState, actions: Sequence[Action]) -> Outcome:
-        raise NotImplementedError("Calculate payoffs/metrics without mutating input")
-
-    def transition(self, config: WorldConfig, state: WorldState, actions: Sequence[Action]) -> TransitionResult:
-        raise NotImplementedError("Return next state/outcome; runtime commits events")
-'''
-
-REPORT = '''"""Preview uses only configuration; final report uses actual recorded results."""
-from pathlib import Path
-
-from simulation_core.execution import JobManifest, JobResult
-
-
-def preview(job: JobManifest, directory: Path) -> Path:
-    # Calculate/explain theory from job.simulation, without running any actor.
-    # Use ReportPreview + write_preview_notebook from simulation_core.reports.
-    raise NotImplementedError("Problem, theory, assumptions, limitations; results pending")
-
-
-def report(artifact: JobResult, directory: Path) -> Path:
-    # Use ReportNarrative + write_experiment_notebook from simulation_core.reports.
-    # Derive observed interpretation from artifact, never assumed actor behavior.
-    raise NotImplementedError("Five-section explanatory report from recorded result")
-'''
-
-
-def write_starter(directory: Path, *, kind: str = "agent_simulation") -> None:
-    if kind not in {"agent_simulation", "tool"}:
-        raise ValueError("Unknown authoring route")
-    directory.mkdir(parents=True, exist_ok=True)
-    files = {"INTERFACES.md": interface_guide(), "experiment_extension/__init__.py": ""}
-    if kind == "agent_simulation":
-        files.update(
-            {
-                "experiment_extension/component.py": MECHANISM,
-                "experiment_extension/report.py": REPORT,
-            }
-        )
-    else:
-        files["experiment_extension/tool.py"] = (
-            '"""Define a typed problem-specific callable; no simulation scaffold needed."""\n'
-        )
+    files = {"INTERFACES.md": interface_guide(), **starter_files(kind, experiment_id)}
+    if any((directory / name).exists() for name in files):
+        raise FileExistsError("Starter must not overwrite existing work")
     for name, content in files.items():
         path = directory / name
         path.parent.mkdir(parents=True, exist_ok=True)

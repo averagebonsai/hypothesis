@@ -1,0 +1,887 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "supplychain_ca24307e",
+  "version": "v2",
+  "gap_analysis": {
+    "objective": "Run one nine-day decentralized LLM supply-chain trajectory through a flood disruption and report production, service, cost, and recovery bottlenecks.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "scheduling",
+          "description": "Four decision phases per day (manufacturer order, joint suppliers, logistics, manufacturer produce/settle) over nine days with per-phase actor sets",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "sequential 36-phase",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "sequential.v1"
+        ],
+        "reason": "sequential.v1's finite phase schedule with configured per-phase actor sets matches the required order/supply/ship/settle cadence exactly, including the joint supplier phase.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "actor_policies",
+          "description": "Live LLM actors with schema-constrained actions, contextual legality retries, and exact zero-action fallback",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 4,
+            "supplier_a": 4,
+            "supplier_b": 4,
+            "logistics": 2
+          },
+          "constraints": [],
+          "timing": "sequential phases",
+          "evaluation": "stochastic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "llm.v1 supplies schema-constrained decisions with a retry budget but no domain legality precheck or configured fallback; the wrapper adds observation-only bound checks mirroring the mechanism plus an exhausted-attempt exact fallback, preserving the canonical observation packet and call records.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "supply_rules",
+          "description": "Multi-echelon inventory, one-day transit pipeline, flood capacity schedule, demand fulfillment, and settlement accounting with decentralized privacy",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 4,
+            "supplier_a": 4,
+            "supplier_b": 4,
+            "logistics": 2
+          },
+          "constraints": [
+            "inventory conservation",
+            "capacity limits",
+            "arrival timing",
+            "lost sales"
+          ],
+          "timing": "sequential",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved mechanism models component-pair assembly, shared flood-disrupted transport, asymmetric private information, or this settlement accounting; extend Mechanism.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "payloads",
+          "description": "Integer order/produce/supply/allocate action payloads",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 4,
+            "supplier_a": 4,
+            "supplier_b": 4,
+            "logistics": 2
+          },
+          "constraints": [],
+          "timing": "sequential phases",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved action schemas cover these four role-specific integer payloads; extend Pydantic models.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "parameters",
+          "description": "Typed world parameters plus seven explicit single-option modeling conventions with rejection of unsupported values",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Supplied economics and convention options need a dedicated validated parameter model; extend Pydantic model.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "bounds",
+          "description": "Action-independent mathematical reference for sales performance",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved solver fits this asymmetric-information sequential game, so a plain-function physical sales bound (710 units) serves as the mathematical reference instead of a Solver/GameView.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reporting",
+          "description": "Explanatory preview and final notebooks with domain figures and recovery analysis",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simulation_core.reports"
+        ],
+        "reason": "Trusted preview/experiment notebook writers supply the five-section contract; domain calculations live in external helpers.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.supplychain_ca24307e.mechanism.supplychainmechanism.v1",
+      "kind": "mechanism",
+      "purpose": "Inventory, transit, capacity, demand, and settlement rules with decentralized private facts.",
+      "gap_id": "supply_rules",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.mechanism:SupplyChainMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_hand_derived_day_one_settlement",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_transfer_cancellation_identity",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_holding_cost_uses_closing_stock",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_dispatch_timing_of_charges",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_opening_stock_is_sunk",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_lost_sales_never_backlogged",
+          "category": "mathematical",
+          "expected": "Hand-derived day-one settlement, transfer cancellation, dispatch timing, sunk opening stock, and lost-sales behavior hold exactly.",
+          "reference": "Day 1: maker 2660, suppliers 540 each, logistics 320, consolidated 4060; sold+lost=demand."
+        },
+        {
+          "name": "test_arrivals_land_next_day",
+          "category": "functional",
+          "expected": "One-day arrivals, day-3 flood onset, day-7 recovery, final-day in-transit, determinism, and evaluate/transition agreement hold.",
+          "reference": "Capacity timeline 200/200/80x4/200x3; arrivals(day d)=dispatches(d-1)."
+        },
+        {
+          "name": "test_flood_onset_day_three_and_recovery_day_seven",
+          "category": "functional",
+          "expected": "One-day arrivals, day-3 flood onset, day-7 recovery, final-day in-transit, determinism, and evaluate/transition agreement hold.",
+          "reference": "Capacity timeline 200/200/80x4/200x3; arrivals(day d)=dispatches(d-1)."
+        },
+        {
+          "name": "test_final_day_dispatches_stay_in_transit",
+          "category": "functional",
+          "expected": "One-day arrivals, day-3 flood onset, day-7 recovery, final-day in-transit, determinism, and evaluate/transition agreement hold.",
+          "reference": "Capacity timeline 200/200/80x4/200x3; arrivals(day d)=dispatches(d-1)."
+        },
+        {
+          "name": "test_fixed_sequence_is_deterministic",
+          "category": "functional",
+          "expected": "One-day arrivals, day-3 flood onset, day-7 recovery, final-day in-transit, determinism, and evaluate/transition agreement hold.",
+          "reference": "Capacity timeline 200/200/80x4/200x3; arrivals(day d)=dispatches(d-1)."
+        },
+        {
+          "name": "test_evaluate_matches_transition",
+          "category": "functional",
+          "expected": "One-day arrivals, day-3 flood onset, day-7 recovery, final-day in-transit, determinism, and evaluate/transition agreement hold.",
+          "reference": "Capacity timeline 200/200/80x4/200x3; arrivals(day d)=dispatches(d-1)."
+        },
+        {
+          "name": "test_schemas_reject_negative_fractional_and_missing",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_rejects_over_capacity_production",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_rejects_production_above_stock_or_assembly_capacity",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_rejects_offer_above_stock_and_acceptance_above_backlog",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_rejects_allocation_above_offer_or_capacity",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_flood_day_allocation_boundary",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_zero_capacity_variant",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_empty_inventory_production",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_unknown_actor_kind_and_terminal_rejected",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_declared_fallback_payloads_are_always_legal",
+          "category": "failure",
+          "expected": "Over-capacity, over-stock, over-offer, over-allocation, negative, fractional, unknown-kind, and terminal actions are rejected; zero-capacity and empty-stock boundaries behave.",
+          "reference": "101>100 rejected; {0,0} accepted at zero capacity; produce 1 with zero stock rejected."
+        },
+        {
+          "name": "test_suppliers_cannot_see_each_other",
+          "category": "interface",
+          "expected": "Decentralized visibility holds: suppliers see only their own orders/offers, logistics sees no orders or demand, policies cannot write private state.",
+          "reference": "supplier_a visible lacks order_b; required fields present in all 8 sampled phases."
+        },
+        {
+          "name": "test_manufacturer_and_logistics_views",
+          "category": "interface",
+          "expected": "Decentralized visibility holds: suppliers see only their own orders/offers, logistics sees no orders or demand, policies cannot write private state.",
+          "reference": "supplier_a visible lacks order_b; required fields present in all 8 sampled phases."
+        },
+        {
+          "name": "test_simultaneous_supply_boundary",
+          "category": "interface",
+          "expected": "Decentralized visibility holds: suppliers see only their own orders/offers, logistics sees no orders or demand, policies cannot write private state.",
+          "reference": "supplier_a visible lacks order_b; required fields present in all 8 sampled phases."
+        },
+        {
+          "name": "test_required_fields_available_every_phase",
+          "category": "interface",
+          "expected": "Decentralized visibility holds: suppliers see only their own orders/offers, logistics sees no orders or demand, policies cannot write private state.",
+          "reference": "supplier_a visible lacks order_b; required fields present in all 8 sampled phases."
+        },
+        {
+          "name": "test_policies_cannot_write_private_state",
+          "category": "interface",
+          "expected": "Decentralized visibility holds: suppliers see only their own orders/offers, logistics sees no orders or demand, policies cannot write private state.",
+          "reference": "supplier_a visible lacks order_b; required fields present in all 8 sampled phases."
+        },
+        {
+          "name": "test_preview_leaves_results_pending",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_baseline_run_reports_nine_days",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_hoard_run_observes_recovery_streak",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_final_report_structure_and_content",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_hoard_report_marks_recovery_observed",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_audit_catches_tampered_result",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_composition_reuses_trusted_core",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        },
+        {
+          "name": "test_no_live_actor_calls_offline",
+          "category": "integration",
+          "expected": "Full 36-phase offline runs complete with 45 decisions, clean audits, and both recovery branches.",
+          "reference": "Baseline sold 630 lost 90 unobserved; hoard sold 240 lost 480 streak 7/9/0."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.action_schema.orderaction.v1",
+      "kind": "action_schema",
+      "purpose": "Manufacturer ordering payload: incremental orders plus advisory priorities.",
+      "gap_id": "payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:OrderAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_schemas_reject_negative_fractional_and_missing",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_over_capacity_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_production_above_stock_or_assembly_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_offer_above_stock_and_acceptance_above_backlog",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_allocation_above_offer_or_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_flood_day_allocation_boundary",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_zero_capacity_variant",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_empty_inventory_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_unknown_actor_kind_and_terminal_rejected",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_declared_fallback_payloads_are_always_legal",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.action_schema.produceaction.v1",
+      "kind": "action_schema",
+      "purpose": "Manufacturer production payload: finished units to assemble.",
+      "gap_id": "payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:ProduceAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_schemas_reject_negative_fractional_and_missing",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_over_capacity_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_production_above_stock_or_assembly_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_offer_above_stock_and_acceptance_above_backlog",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_allocation_above_offer_or_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_flood_day_allocation_boundary",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_zero_capacity_variant",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_empty_inventory_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_unknown_actor_kind_and_terminal_rejected",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_declared_fallback_payloads_are_always_legal",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.action_schema.supplyaction.v1",
+      "kind": "action_schema",
+      "purpose": "Supplier payload: production, backlog acceptance, shipment offer, priority.",
+      "gap_id": "payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:SupplyAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_schemas_reject_negative_fractional_and_missing",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_over_capacity_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_production_above_stock_or_assembly_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_offer_above_stock_and_acceptance_above_backlog",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_allocation_above_offer_or_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_flood_day_allocation_boundary",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_zero_capacity_variant",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_empty_inventory_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_unknown_actor_kind_and_terminal_rejected",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_declared_fallback_payloads_are_always_legal",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.action_schema.allocateaction.v1",
+      "kind": "action_schema",
+      "purpose": "Logistics payload: capacity allocation across submitted offers.",
+      "gap_id": "payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:AllocateAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_schemas_reject_negative_fractional_and_missing",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_over_capacity_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_production_above_stock_or_assembly_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_offer_above_stock_and_acceptance_above_backlog",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_rejects_allocation_above_offer_or_capacity",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_flood_day_allocation_boundary",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_zero_capacity_variant",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_empty_inventory_production",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_unknown_actor_kind_and_terminal_rejected",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        },
+        {
+          "name": "test_declared_fallback_payloads_are_always_legal",
+          "category": "failure",
+          "expected": "Integer nonnegative payloads validate; negative, fractional, and missing fields are rejected.",
+          "reference": "1.5 rejected as non-integer; -1 rejected per field."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.parameter_schema.supplychainparameters.v1",
+      "kind": "parameter_schema",
+      "purpose": "Typed world parameters with explicit modeling-convention options.",
+      "gap_id": "parameters",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.schemas:SupplyChainParameters",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_draft_preserves_supplied_inputs_and_behaviors",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_initial_conditions_are_enforced",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_capacity_and_demand_changes_alter_behavior",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_finished_goods_holding_uses_closing_finished_stock",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_capacity_limits_and_schedule_are_enforced",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_horizon_and_schedule_mismatch_rejected",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_transit_days_and_conventions_reject_alternatives",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_mechanism_requires_exact_roles",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        },
+        {
+          "name": "test_max_steps_bounds_the_run",
+          "category": "functional",
+          "expected": "Every supplied parameter alters execution or validation; unsupported convention values are rejected; role set is exact.",
+          "reference": "Price +10 moves maker profit +800; transit_days=2 rejected; 19 inputs preserved."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.policy.supplychainpolicy.v1",
+      "kind": "policy",
+      "purpose": "LLM wrapper with observation-only bound checks and exhausted-attempt exact fallback.",
+      "gap_id": "actor_policies",
+      "parent_interface": "simulation_core.policy.Policy",
+      "symbol": "experiment_extension.policy:SupplyChainPolicy",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_accepted_decision_preserves_canonical_packet",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_infeasible_proposal_retries_then_falls_back",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_retry_then_accept",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_gateway_error_falls_back",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_fallback_kind_follows_phase",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_fallback_matches_declared_attributes",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        },
+        {
+          "name": "test_contextual_bounds_mirror_mechanism",
+          "category": "integration",
+          "expected": "Canonical observation packets, contextual retry, exhausted-attempt exact fallback, and mechanism-mirroring bounds hold.",
+          "reference": "Produce 999 retried twice then fallback {produce:0}; wrapper/mechanism agree on boundary payloads."
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_ca24307e.utility.physical_bounds.v1",
+      "kind": "utility",
+      "purpose": "Action-independent physical sales bound used as the mathematical reference.",
+      "gap_id": "bounds",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.bounds:physical_bounds",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_hand_derived_overall_bound",
+          "category": "mathematical",
+          "expected": "Overall sales bound 710 with minimum lost sales 10; variations tighten correctly.",
+          "reference": "(150+150+1120)//2=710; zero opening stock gives 560."
+        },
+        {
+          "name": "test_bound_without_disruption",
+          "category": "mathematical",
+          "expected": "Overall sales bound 710 with minimum lost sales 10; variations tighten correctly.",
+          "reference": "(150+150+1120)//2=710; zero opening stock gives 560."
+        },
+        {
+          "name": "test_bound_tightens_with_small_opening_stock",
+          "category": "mathematical",
+          "expected": "Overall sales bound 710 with minimum lost sales 10; variations tighten correctly.",
+          "reference": "(150+150+1120)//2=710; zero opening stock gives 560."
+        },
+        {
+          "name": "test_bound_follows_demand_and_assembly",
+          "category": "mathematical",
+          "expected": "Overall sales bound 710 with minimum lost sales 10; variations tighten correctly.",
+          "reference": "(150+150+1120)//2=710; zero opening stock gives 560."
+        },
+        {
+          "name": "test_reported_sales_never_exceed_bound",
+          "category": "mathematical",
+          "expected": "Overall sales bound 710 with minimum lost sales 10; variations tighten correctly.",
+          "reference": "(150+150+1120)//2=710; zero opening stock gives 560."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [],
+  "repair_counts": {
+    "implementation_validation": 1
+  },
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "preview_generator": "experiment_extension.report:preview",
+    "generator": "experiment_extension.report:report"
+  },
+  "verification": {
+    "variables": [],
+    "objectives": [],
+    "independent_reference": "none",
+    "tolerance": 1e-6,
+    "reference_cases": [],
+    "action_behavior": "unverified",
+    "parameter_cases": [],
+    "custom_checks": [
+      {
+        "id": "supply_chain_audit",
+        "symbol": "experiment_extension.checks:SupplyChainAuditCheck",
+        "required": true,
+        "purpose": "Independently recompute conservation, cash-flow, capacity, and timing identities from recorded events."
+      }
+    ]
+  }
+}

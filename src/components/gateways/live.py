@@ -6,6 +6,7 @@ from simulation_core.model_gateway import ModelGateway
 
 from .meta import MetaResponsesGateway
 from .openai import OpenAIResponsesGateway
+from .pool import GatewayPool
 from .settings import LiveModelSettings
 
 
@@ -16,7 +17,16 @@ def configured_gateway(
     stream: bool = True,
 ) -> tuple[str, ModelGateway]:
     settings = LiveModelSettings.load(model)
-    return _gateway(settings, timeout=timeout, stream=stream)
+    keys = settings.actor_api_keys or (settings.api_key,)
+    gateways = tuple(
+        _gateway(
+            settings.model_copy(update={"api_key": key}),
+            timeout=timeout,
+            stream=stream,
+        )[1]
+        for key in keys
+    )
+    return settings.model, GatewayPool(gateways, settings.model)
 
 
 def configured_coding_gateway(env_file: Path | None = None) -> tuple[str, ModelGateway]:

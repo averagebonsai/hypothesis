@@ -22,6 +22,9 @@ class AuthoringProgress:
         self.heartbeat_seconds = heartbeat_seconds
         self.last_activity = "starting"
         self.tools = self.retries = 0
+        self.last_tool_completed = self.started
+        self.activity_counts: dict[str, int] = {}
+        self.activity_intervals: dict[str, float] = {}
         self.runs: dict[str, dict[str, object]] = {}
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -63,9 +66,35 @@ class AuthoringProgress:
                     description = str(data.get("description") or tool)
             except ValueError:
                 pass
+            text = (str(tool) + " " + description).lower()
+            if any(word in text for word in ("fix", "repair", "correct", "rename")):
+                activity = "repair"
+            elif any(word in text for word in ("write_file", "edit_file", "apply_patch")):
+                activity = "writing"
+            elif any(word in text for word in ("read_file", "inspect", "read ", "list ", "find ")):
+                activity = "inspection"
+            elif any(
+                word in text
+                for word in ("author-check", "pytest", "test", "ruff", "mypy", "lint", "assemble")
+            ):
+                activity = "checks"
+            else:
+                activity = "other"
+            now = self.clock()
+            interval = now - self.last_tool_completed
+            self.last_tool_completed = now
+            self.activity_counts[activity] = self.activity_counts.get(activity, 0) + 1
+            self.activity_intervals[activity] = (
+                self.activity_intervals.get(activity, 0.0) + interval
+            )
             self.last_activity = description[:180]
             self.record(
-                "tool_completed", f"{description[:180]} ({outcome})", tool=tool, tools=self.tools
+                "tool_completed",
+                f"{description[:180]} ({outcome})",
+                tool=tool,
+                tools=self.tools,
+                activity=activity,
+                observed_interval_seconds=interval,
             )
         elif kind == "task.lifecycle.status":
             detail = payload.get("event", {})
@@ -98,6 +127,15 @@ class AuthoringProgress:
                 f"Waiting; last activity: {self.last_activity}; {self.tools} tools completed",
                 retries=self.retries,
             )
+
+    def activity_summary(self) -> dict[str, object]:
+        return {
+            "elapsed_seconds": self.clock() - self.started,
+            "tool_counts": dict(self.activity_counts),
+            "observed_intervals_seconds": dict(self.activity_intervals),
+            "unassigned_tail_seconds": self.clock() - self.last_tool_completed,
+            "scope": "Observed intervals before tool completions include model deliberation and event delivery; they are not exact tool execution durations. author-check records exact check wall times separately.",
+        }
 
     def usage(self) -> dict[str, int]:
         totals = {

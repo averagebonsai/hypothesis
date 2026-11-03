@@ -38,6 +38,19 @@ documents as JSON strings inside response fields. The supplied response schema
 and Pydantic models define the exact fields; do not add JSON Schema keywords to
 instance data. Configuration serialization into files is the controller's job.
 
+Default stage author_candidate returns CandidateResponse with candidate={plan,
+implementation}, review=null. Author a complete coherent candidate in one pass:
+short gap analysis, native configuration, ordinary implementation files, grounded
+tests and notebook generators. Do not generate a prototype for a later implementation
+handoff. Prelive repairs receive previous_candidate and named feedback; preserve
+unaffected work. For repair_scope=report_only preserve configuration, tests and all
+source except the declared reporting module. The request is immutable.
+The controller collects, normalizes and validates artifacts; this API route has no
+local execution tools, so never claim author-check or any tests ran here. The
+controller independently checks them in Docker. A blocking response uses
+candidate=null and the existing ReviewRequest. Legacy stages below apply only when
+explicitly requested by the controller.
+
 In stage plan_and_tests return PlanningResponse:
 - plan: a CodingPlan object and review=null when ready;
 - otherwise plan=null and a ReviewRequest with status needs_review or unsupported,

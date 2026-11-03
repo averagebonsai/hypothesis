@@ -29,6 +29,7 @@ def main() -> None:
         "starter", help="Write domain-neutral templates without running them"
     )
     starter.add_argument("directory", type=Path)
+    starter.add_argument("--experiment-id", default="starter")
     starter.add_argument("--kind", choices=("agent_simulation", "tool"), default="agent_simulation")
     for name in ("preview", "report"):
         render = commands.add_parser(name, help="Render offline without any actor/model calls")
@@ -41,9 +42,14 @@ def main() -> None:
     author.add_argument("--request", type=Path, required=True)
     author.add_argument("--experiment-id", required=True)
     author.add_argument("--backend", choices=("muse", "api"), default="muse")
+    author.add_argument(
+        "--legacy-staged",
+        action="store_true",
+        help="Explicit compatibility mode; default authors a complete candidate in one pass",
+    )
     author.add_argument("--actor-settings", type=Path)
     author.add_argument("--actor-output-tokens", type=int, default=None)
-    author.add_argument("--actor-call-budget", type=int, default=48)
+    author.add_argument("--actor-call-budget", type=int, default=None)
     for command in ("seal", "inspect", "validate", "run"):
         subparser = commands.add_parser(command)
         subparser.add_argument("bundle", type=Path)
@@ -63,7 +69,7 @@ def main() -> None:
     elif args.command == "starter":
         from .guide import write_starter
 
-        write_starter(args.directory, kind=args.kind)
+        write_starter(args.directory, kind=args.kind, experiment_id=args.experiment_id)
     elif args.command in {"preview", "report"}:
         from simulation_core.execution import JobResult
 
@@ -110,6 +116,7 @@ def main() -> None:
             actor_max_output_tokens=args.actor_output_tokens,
             actor_max_total_calls=args.actor_call_budget,
             actor_settings=actor_settings,
+            combined_authoring=not args.legacy_staged,
         )
         assert agent.execution_settings is not None
         model, gateway = configured_gateway(

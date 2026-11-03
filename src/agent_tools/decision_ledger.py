@@ -28,7 +28,7 @@ class DecisionLedger(ModelGateway):
         directory: Path,
         *,
         max_calls: int | None = None,
-        max_calls_per_actor: int | None = None,
+        max_calls_per_actor: int | dict[str, int] | None = None,
     ) -> None:
         self.gateway = gateway
         self.directory = directory
@@ -47,8 +47,13 @@ class DecisionLedger(ModelGateway):
     def last_replayed(self) -> bool:
         return bool(getattr(self._local, "replayed", False))
 
+    @property
+    def route_metadata(self) -> dict[str, int | float]:
+        return getattr(self._local, "route", {})
+
     def complete(self, request: ModelRequest) -> ModelResponse:
         self._local.replayed = False
+        self._local.route = {}
         # Canonicalize JSON; never retrieve from a different trial or changed request.
         value = request.model_dump(mode="json")
         value["input_json"] = json.loads(request.input_json)
@@ -69,9 +74,13 @@ class DecisionLedger(ModelGateway):
             with self._lock:
                 usage_path = self.directory / "usage.json"
                 usage = json.loads(usage_path.read_text()) if usage_path.exists() else {}
+                actor_limit = (
+                    self.max_calls_per_actor.get(request.actor_id)
+                    if isinstance(self.max_calls_per_actor, dict)
+                    else self.max_calls_per_actor
+                )
                 if (self.max_calls is not None and sum(usage.values()) >= self.max_calls) or (
-                    self.max_calls_per_actor is not None
-                    and usage.get(request.actor_id, 0) >= self.max_calls_per_actor
+                    actor_limit is not None and usage.get(request.actor_id, 0) >= actor_limit
                 ):
                     raise GatewayError("durable_call_budget_exhausted")
                 usage[request.actor_id] = usage.get(request.actor_id, 0) + 1
@@ -85,6 +94,8 @@ class DecisionLedger(ModelGateway):
             except GatewayError:
                 pending.unlink(missing_ok=True)
                 raise
+            finally:
+                self._local.route = getattr(self.gateway, "route_metadata", {})
             atomic_json(path, {"request": value, "response": response.model_dump(mode="json")})
             pending.unlink(missing_ok=True)
             return response

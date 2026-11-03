@@ -1,7 +1,9 @@
 # Faster simulations and the next public-goods trial
 
-The next live experiment has **not** been run. The prepared requests contain rules
-and preferences, not past decisions, results or implementation code.
+The neutral live experiment was run as `public_goods_fast_faae5470`; see its
+[results and timing report](../experimental_components/public_goods_fast_faae5470/README.md).
+The prepared requests contain rules and preferences, not past decisions or results.
+The optional heterogeneous variant remains unrun.
 
 ## Prepared inputs
 
@@ -21,6 +23,16 @@ and preferences, not past decisions, results or implementation code.
   Actor reasoning remains provider-default rather than guessing an unsupported
   lower reasoning level. Muse Code continues using `MODEL_CODING` with maximum
   reasoning; simulation actors use `MODEL`. The settings model must match `MODEL`.
+
+## Default fast execution
+
+Concurrent calls, streaming, checkpoints and schedule-derived call budgets are the
+default authoring behavior, without needing a special fast flag or experiment file.
+Additional API_KEY_2, API_KEY_3, etc. are loaded only by the host actor gateway.
+Distinct keys are leased to requests and returned on success or failure; calls wait
+for a free credential when actors outnumber available keys. The actor audit records
+credential_slot and credential_wait_seconds, never the key. Muse Code continues
+using the primary API_KEY independently.
 
 ## What makes execution faster
 

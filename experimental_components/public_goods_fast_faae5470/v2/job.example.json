@@ -1,0 +1,388 @@
+{
+  "schema_version": "simulation.job.v1",
+  "request": {
+    "schema_version": "experiment.request.v1",
+    "hypothesis": "How do three LLM participants change contributions when a known endowment stops after round 3 of a six-round public-goods game, while saved balances remain spendable?",
+    "execution_kind": "agent_simulation",
+    "problem": null,
+    "supplied_inputs": [
+      {
+        "name": "participant count",
+        "value": 3,
+        "target_path": "/world/parameters/participant_count",
+        "source_reference": null
+      },
+      {
+        "name": "total rounds",
+        "value": 6,
+        "target_path": "/world/parameters/rounds",
+        "source_reference": null
+      },
+      {
+        "name": "last endowed round",
+        "value": 3,
+        "target_path": "/world/parameters/endowed_rounds",
+        "source_reference": null
+      },
+      {
+        "name": "early endowment per participant per round",
+        "value": 20.0,
+        "target_path": "/world/parameters/endowment",
+        "source_reference": null
+      },
+      {
+        "name": "public good multiplier",
+        "value": 2.0,
+        "target_path": "/world/parameters/multiplier",
+        "source_reference": null
+      }
+    ],
+    "requirements": [
+      "This is a repeated agent simulation using three live LLM actors, simultaneous.v1, permission-filtered observations, private memory, the event log, and custom mechanism rules only where needed. Use MODEL for actors; Muse Code uses MODEL_CODING at max reasoning.",
+      "There are 6 simultaneous rounds, with one contribution per participant per round. All participants start at zero saved balance. Rounds 1-3 give each participant a fresh endowment of 20; rounds 4-6 give zero. The horizon and withdrawal schedule are known by all participants from the outset (user clarification).",
+      "All previous earnings are saved. At the opening of a round, available funds are prior accumulated balance plus that round's endowment. Any finite nonnegative contribution up to those available funds is legal, including above 20 and all saved funds. No borrowing against the current round's future pool payout, no debt, no arbitrary contribution cap of 20, no automatic zero contributions after withdrawal.",
+      "For N participants, round payoff_i = endowment_this_round - contribution_i + multiplier * sum(contributions)/N. Closing saved_balance_i = opening_saved_balance_i + round_payoff_i. Public-good payout occurs only after all participants commit; wealth and payoff must not be confused or double-counted. Configuration and mechanism must support varied N, horizon, withdrawal timing, endowments and multipliers, not just these literal values.",
+      "Participants know the rules and schedule, their own available/saved funds and past public round feedback. As a recorded modeling assumption, reveal each completed round's contributions and payoffs to all; never reveal simultaneous uncommitted decisions or another participant's private memory. Future balances may be inferred from public feedback. Only mechanism transitions change saved funds; policy may update its own memory, not its budget.",
+      "Default textbook objective: risk-neutral maximization of final own accumulated balance over the announced horizon, with no externally imposed social preferences. Give neutral instructions, no prescribed contribution strategy or mathematical reference actions. Each action must include a concise recorded rationale tied to current funds, history, incentives and beliefs about other participants. Do not request hidden internal reasoning.",
+      "Compute separate mathematical reference trajectories with stated assumptions: self-interested zero contribution for the known finite-horizon textbook setting, and full reinvestment as a cooperative group-wealth reference for multiplier > 1. Do not call the cooperative trajectory a Nash equilibrium or predict that LLMs will follow either reference. Explain the marginal private return multiplier/N and its scope, and distinguish one-shot incentive arguments from assumptions for finite-horizon backward induction.",
+      "Acceptance must be deterministic/offline: verify budget rejection, finite/negative actions, positive saved-fund contributions after withdrawal, over-20 legal contributions, no double counting, aggregate wealth conservation/growth identity sum(closing balances)=sum(opening balances)+N*endowment+(multiplier-1)*sum(contributions), round indexing at the 3/4 boundary, privacy/memory and variations in accepted parameters. Include hand-derived cases independent of execution helpers; a sampled check is not a theorem proof.",
+      "Use the generic notebook writers and offline preview. Final notebook: background/rationale; executed reporting code, contribution and wealth trajectories with withdrawal marker, phase statistics and mathematical comparisons; original decision rationales once in their own section; human-readable substantive assumptions without raw config field/value dumps; limitations. Avoid repeating the full results table in prose. Code must call external modules rather than implementing economic calculations or rerunning actors in cells.",
+      "The preview covers only problem definition, mathematical references/theory and assumptions/limitations. Actual behavior and its interpretation remain pending until recorded. The final report should explain actual observed adaptation, not infer a general learned policy or a causal treatment effect from one trajectory without a control. A static LLMPolicy with history/memory is not a trained reinforcement-learning policy.",
+      "Use one live primary simulation only. Report-only corrections must re-render the saved result without more actor calls. Offline acceptance and composition tests must not call live actors. Actor budgets are supplied centrally with enough room for all rounds and configured retries. Keep all new components in the versioned experiment bundle and do not modify the main scaffold.",
+      "Use actor IDs p1, p2 and p3. Copy each typed actor_behaviors entry into the corresponding llm.v1 policy_parameters.behavior without changing it. Shared instructions should state the game rules; individual objectives and tendencies belong in the private behavior profile. Never reveal another participant's profile in observations or shared state.",
+      "All three actors retain neutral own-wealth objectives in this default request. No prescribed deviation, contribution schedule or cooperative strategy is assigned. Prompted tendencies are not guaranteed actions; any deterministic strategy requires an explicitly selected deterministic policy.",
+      "Aim for 10-15 minutes end to end on this small task, with planning around two minutes and implementation around three. These are soft targets, not cutoffs. Start from the concise interface guide and starter; inspect further source only to resolve a named gap, retain prototypes between stages, and stop once required checks pass. Do not weaken tests or omit notebook explanation to meet a timing target.",
+      "The operator enables concurrent decisions within each simultaneous round. Do not implement your own thread pool, transport, persistence, timeout or retry loop. Use the trusted runtime and centralized execution settings. Keep one logical live trajectory; recover through committed-event checkpoints and the current-run response ledger, and render corrections from the saved artifact."
+    ],
+    "actor_behaviors": [
+      {
+        "actor_id": "p1",
+        "objective": "Maximize your own final saved balance.",
+        "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+        "background": ""
+      },
+      {
+        "actor_id": "p2",
+        "objective": "Maximize your own final saved balance.",
+        "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+        "background": ""
+      },
+      {
+        "actor_id": "p3",
+        "objective": "Maximize your own final saved balance.",
+        "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+        "background": ""
+      }
+    ]
+  },
+  "simulation": {
+    "schema_version": "simulation.config.v1",
+    "world": {
+      "actors": [
+        {
+          "id": "p1",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_fast_faae5470.contribution"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "behavior": {
+              "actor_id": "p1",
+              "background": "",
+              "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+              "objective": "Maximize your own final saved balance."
+            },
+            "instructions": "You are one of three participants (p1, p2, p3) in a six-round public-goods game. Rules: rounds 1-3 pay each participant a fresh endowment of 20; rounds 4-6 pay 0. The horizon and withdrawal schedule are fixed and known to all. Each round, all participants simultaneously choose a contribution: any finite amount from 0 up to your available funds (your saved balance plus this round's endowment), including amounts above 20 and your entire savings. You cannot borrow against this round's pool payout. After everyone commits, your round payoff is endowment minus your contribution plus 2 times total contributions divided by 3, and it is added to your saved balance. After each round you see everyone's contributions and payoffs; you never see others' uncommitted choices or private notes. Your final saved balance after round 6 is what counts. Each round submit one contribution plus a concise rationale of one to three sentences tied to your current funds, the observed history, the incentives you face, and your beliefs about the others. Record only the rationale, not hidden internal reasoning. No contribution strategy is prescribed.",
+            "max_attempts": 2,
+            "max_calls": 12,
+            "model": "muse-spark-1.3-contributor",
+            "required_fields": [
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "participant_count",
+              "saved_balances",
+              "history"
+            ],
+            "reasoning_effort": null,
+            "max_output_tokens": null
+          }
+        },
+        {
+          "id": "p2",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_fast_faae5470.contribution"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "behavior": {
+              "actor_id": "p2",
+              "background": "",
+              "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+              "objective": "Maximize your own final saved balance."
+            },
+            "instructions": "You are one of three participants (p1, p2, p3) in a six-round public-goods game. Rules: rounds 1-3 pay each participant a fresh endowment of 20; rounds 4-6 pay 0. The horizon and withdrawal schedule are fixed and known to all. Each round, all participants simultaneously choose a contribution: any finite amount from 0 up to your available funds (your saved balance plus this round's endowment), including amounts above 20 and your entire savings. You cannot borrow against this round's pool payout. After everyone commits, your round payoff is endowment minus your contribution plus 2 times total contributions divided by 3, and it is added to your saved balance. After each round you see everyone's contributions and payoffs; you never see others' uncommitted choices or private notes. Your final saved balance after round 6 is what counts. Each round submit one contribution plus a concise rationale of one to three sentences tied to your current funds, the observed history, the incentives you face, and your beliefs about the others. Record only the rationale, not hidden internal reasoning. No contribution strategy is prescribed.",
+            "max_attempts": 2,
+            "max_calls": 12,
+            "model": "muse-spark-1.3-contributor",
+            "required_fields": [
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "participant_count",
+              "saved_balances",
+              "history"
+            ],
+            "reasoning_effort": null,
+            "max_output_tokens": null
+          }
+        },
+        {
+          "id": "p3",
+          "kind": "participant",
+          "attributes": {},
+          "action_space": {
+            "schemas": {
+              "contribute": "experimental.public_goods_fast_faae5470.contribution"
+            }
+          },
+          "policy_id": "llm.v1",
+          "policy_parameters": {
+            "behavior": {
+              "actor_id": "p3",
+              "background": "",
+              "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+              "objective": "Maximize your own final saved balance."
+            },
+            "instructions": "You are one of three participants (p1, p2, p3) in a six-round public-goods game. Rules: rounds 1-3 pay each participant a fresh endowment of 20; rounds 4-6 pay 0. The horizon and withdrawal schedule are fixed and known to all. Each round, all participants simultaneously choose a contribution: any finite amount from 0 up to your available funds (your saved balance plus this round's endowment), including amounts above 20 and your entire savings. You cannot borrow against this round's pool payout. After everyone commits, your round payoff is endowment minus your contribution plus 2 times total contributions divided by 3, and it is added to your saved balance. After each round you see everyone's contributions and payoffs; you never see others' uncommitted choices or private notes. Your final saved balance after round 6 is what counts. Each round submit one contribution plus a concise rationale of one to three sentences tied to your current funds, the observed history, the incentives you face, and your beliefs about the others. Record only the rationale, not hidden internal reasoning. No contribution strategy is prescribed.",
+            "max_attempts": 2,
+            "max_calls": 12,
+            "model": "muse-spark-1.3-contributor",
+            "required_fields": [
+              "rounds",
+              "endowed_rounds",
+              "endowment",
+              "multiplier",
+              "participant_count",
+              "saved_balances",
+              "history"
+            ],
+            "reasoning_effort": null,
+            "max_output_tokens": null
+          }
+        }
+      ],
+      "parameters": {
+        "endowed_rounds": 3,
+        "endowment": 20.0,
+        "multiplier": 2.0,
+        "participant_count": 3,
+        "rounds": 6
+      },
+      "initial_public_state": {
+        "endowed_rounds": 3,
+        "endowment": 20.0,
+        "history": [],
+        "multiplier": 2.0,
+        "participant_count": 3,
+        "rounds": 6,
+        "saved_balances": {
+          "p1": 0.0,
+          "p2": 0.0,
+          "p3": 0.0
+        }
+      },
+      "initial_private_state": {
+        "p1": {
+          "facts": {},
+          "memory": {}
+        },
+        "p2": {
+          "facts": {},
+          "memory": {}
+        },
+        "p3": {
+          "facts": {},
+          "memory": {}
+        }
+      }
+    },
+    "mechanism_id": "experimental.public_goods_fast_faae5470.mechanism",
+    "protocol_id": "simultaneous.v1",
+    "protocol_parameters": {
+      "rounds": 6
+    },
+    "permissions": {
+      "p1": {
+        "public_fields": [
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "participant_count",
+          "saved_balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p2": {
+        "public_fields": [
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "participant_count",
+          "saved_balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      },
+      "p3": {
+        "public_fields": [
+          "rounds",
+          "endowed_rounds",
+          "endowment",
+          "multiplier",
+          "participant_count",
+          "saved_balances",
+          "history"
+        ],
+        "private_fields": [],
+        "readable_memory": true,
+        "writable_private_fields": [],
+        "writable_memory": true
+      }
+    },
+    "phase_permissions": {},
+    "benchmark": null,
+    "max_steps": 6,
+    "assumptions": [
+      {
+        "path": "/world/parameters/participant_count",
+        "value": 3,
+        "source": "user",
+        "rationale": "Three participants act in every round of this run.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/rounds",
+        "value": 6,
+        "source": "user",
+        "rationale": "The game lasts six simultaneous rounds.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/endowed_rounds",
+        "value": 3,
+        "source": "user",
+        "rationale": "Fresh endowments are paid in rounds 1-3 only, and the withdrawal schedule is known to all from the outset.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/endowment",
+        "value": 20.0,
+        "source": "user",
+        "rationale": "Each endowed round pays 20 per participant.",
+        "reference": null
+      },
+      {
+        "path": "/world/parameters/multiplier",
+        "value": 2.0,
+        "source": "user",
+        "rationale": "Each contributed unit returns a multiplied share to every participant through the common pool.",
+        "reference": null
+      },
+      {
+        "path": "/world/initial_public_state/saved_balances",
+        "value": {
+          "p1": 0.0,
+          "p2": 0.0,
+          "p3": 0.0
+        },
+        "source": "user",
+        "rationale": "Everyone starts with zero saved balance; all funds come from endowments and pool payouts.",
+        "reference": null
+      },
+      {
+        "path": "/world/initial_public_state/history",
+        "value": [],
+        "source": "model",
+        "rationale": "Completed rounds append public contribution and payoff records, while simultaneous uncommitted choices stay hidden.",
+        "reference": null
+      },
+      {
+        "path": "/protocol_parameters/rounds",
+        "value": 6,
+        "source": "user",
+        "rationale": "The simultaneous protocol runs one joint decision batch per round for six rounds.",
+        "reference": null
+      },
+      {
+        "path": "/max_steps",
+        "value": 6,
+        "source": "model",
+        "rationale": "One committed step per round; the run ends after six transitions.",
+        "reference": null
+      },
+      {
+        "path": "/mechanism_id",
+        "value": "experimental.public_goods_fast_faae5470.mechanism",
+        "source": "model",
+        "rationale": "Custom withdrawal and budget rules settle payoffs; only mechanism transitions change saved funds.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/0/policy_parameters/behavior",
+        "value": {
+          "actor_id": "p1",
+          "background": "",
+          "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+          "objective": "Maximize your own final saved balance."
+        },
+        "source": "textbook",
+        "rationale": "Risk-neutral maximization of final own balance with no assigned social preference or strategy, per the textbook default.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/1/policy_parameters/behavior",
+        "value": {
+          "actor_id": "p2",
+          "background": "",
+          "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+          "objective": "Maximize your own final saved balance."
+        },
+        "source": "textbook",
+        "rationale": "Risk-neutral maximization of final own balance with no assigned social preference or strategy, per the textbook default.",
+        "reference": null
+      },
+      {
+        "path": "/world/actors/2/policy_parameters/behavior",
+        "value": {
+          "actor_id": "p3",
+          "background": "",
+          "behavioral_instructions": "No assigned social preference or prescribed contribution strategy. Form your own beliefs from permitted observations.",
+          "objective": "Maximize your own final saved balance."
+        },
+        "source": "textbook",
+        "rationale": "Risk-neutral maximization of final own balance with no assigned social preference or strategy, per the textbook default.",
+        "reference": null
+      }
+    ]
+  }
+}

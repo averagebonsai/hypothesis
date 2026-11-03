@@ -122,7 +122,9 @@ def test_workflow_completes_once_or_stops_after_live_failure_without_reexecution
             return PlanningResponse(plan=plan, review=None).model_dump_json()
         return ImplementationResponse(implementation=implementation, review=None).model_dump_json()
 
-    agent = CodingAgent(PROJECT, FakeGateway(respond), "fake", tmp_path / "audit")
+    agent = CodingAgent(
+        PROJECT, FakeGateway(respond), "fake", tmp_path / "audit", combined_authoring=False
+    )
 
     class Worker:
         runs = 0

@@ -24,24 +24,43 @@ configuration options whose behavior is implemented; reject unsupported values.
 Checks sharing the execution calculation establish consistency, not independent
 correctness. Ground mathematical checks in separately derived examples or oracles.
 
-For stage plan_and_tests:
-1. Inspect inventory and applicable parent interfaces; classify gaps as REUSE,
-   COMPOSE, EXTEND, or UNSUPPORTED. Resolve shapes, timing, privacy and guarantees.
-2. Write /workspace/draft.json containing CodingPlan fields summary, bundle,
-   kind, simulation, tool, but omit tests. Bundle version must be v1 and use the
-   supplied experiment_id. Dependencies name component IDs; installed Python
-   distributions belong in existing_dependencies. Ordinary utilities need no
-   solver contract. A mathematical solver does need its MethodContract.
-3. Write ordinary Python acceptance files under /workspace/tests/. They must call
-   the proposed exported implementations and compare independently grounded
-   expectations. Cover relevant rejection, boundary and parameter cases. Do not
-   reject strategically poor actions unless the user's rules make them illegal.
-4. Use JSON-aware fixture boundaries, such as agent_tools.fixtures, for strict
-   tuple-backed core models. Check test syntax and Ruff before finalizing.
-5. Run `python -m extension_worker.muse assemble` to create and validate the native
-   PlanningResponse in /workspace/response.json. Correct any schema errors.
+For the default stage author_candidate:
+1. Start with /inputs/starter/INTERFACES.md. The starter is a runnable synthetic
+   example with configuration, rules, grounded tests and preview/final reports.
+   Adapt only what is needed for the current request; remove demonstration rules,
+   actors and files that do not belong. Never use its scripted policies as a fallback
+   for requested live LLM actors. Use approved components when their rules match.
+2. Write a short gap analysis, then code, tests, configuration and notebook generators
+   together. Write draft.json with CodingPlan fields except tests; bundle namespace
+   and version may be omitted. Ordinary files live under experiment_extension/ and
+   tests/. Write summary.txt. Do not build a throwaway prototype for a later stage.
+3. Use component_id(experiment_id, kind, symbol_name) from agent_tools.workspace
+   when referring to automatically generated export IDs. A component may use
+   test_groups=[{file, category, expected, reference}] instead of repeating test names;
+   the collector discovers names. Expectations and independent grounding remain yours.
+   Existing explicit IDs and acceptance_tests remain supported.
+4. Run `author-check`. This one offline command formats imports/source, checks
+   metadata, lint, types, tests, composition and preview, and writes response.json
+   when ready. Read .author-check/report.json for exact named failures and durations.
+   Repair the failing part and retain unrelated passing code. --only SECTION reuses
+   unchanged passing checks. Changed dependencies invalidate cached results.
+5. Before live execution the controller reviews the preview and seals a versioned
+   candidate. The user request is immutable. Prelive repairs may return an updated
+   complete candidate, but must not relax user facts or weaken tests to hide defects.
+   repair_scope=report_only means preserve all configuration, tests and every source
+   except the declared final report module byte-for-byte.
+6. End when author-check is ready. No separate planning/implementation handoff is
+   needed. There is no turn cap or generation-token ceiling. For small supported
+   tasks, target a complete offline-validated candidate in about five minutes; this
+   is a measurement target, not permission to omit checks or a guaranteed deadline.
 
-For implementation or repair_implementation:
+Legacy stage plan_and_tests remains available only when explicitly selected. It
+returns the previous PlanningResponse contract; do not select it yourself. The
+standard author_candidate response is CandidateResponse(candidate={plan,
+implementation}, review=null). To report a blocking issue, write review.json and run
+`python -m extension_worker.muse assemble`; no further model/actor calls are required.
+
+For explicit legacy implementation or report-only repair_implementation:
 1. Frozen test files are already available at task.frozen_tests_directory (read-only);
    any previous implementation from THIS trial is already materialized in /workspace.
    Reuse those files rather than recreating fixtures from JSON.
@@ -93,17 +112,8 @@ of what you wrote and which checks you actually ran.
 Start with /inputs/starter/INTERFACES.md. It is the concise interface map, routes,
 component locations, limits, validation commands and completion checklist. Consult
 full source only for a specific unresolved detail. /inputs/starter contains optional
-small templates: copy only needed files, replacing every NotImplementedError.
+working synthetic example: copy and adapt only needed files. It is not the user's experiment or evidence about how LLM actors behave.
 Do not create an unused custom mechanism when an approved mechanism matches.
-
-For a small experiment, aim for planning near two minutes and implementation near
-three minutes, leaving the rest of a 10-15 minute target for preview, validation and
-live actors. These are soft targets, not turn caps or permission to omit checks.
-During planning, resolve the component gaps, freeze the smallest coherent contract
-and grounded tests, then assemble. Do not develop the entire implementation in this
-stage or reread the toolkit without a named unresolved question. Retain any necessary
-prototype. If a genuinely unfamiliar prerequisite needs more work, report the concrete
-gap rather than pretending the timing target is guaranteed.
 
 Preserve request.actor_behaviors unchanged in the corresponding llm.v1
 policy_parameters.behavior. The typed fields are actor_id, objective,

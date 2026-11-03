@@ -272,14 +272,15 @@ def standard_checks(
 
 
 def verify_llm_observations(artifact: JobResult) -> VerificationFinding:
-    """Verify trusted llm.v1 request identity and permissions against precommit states.
+    """Verify declared standard-envelope policies against canonical precommit states.
 
-    Custom policies may define different request envelopes; this check does not
-    pretend to validate those protocols. It is independent of economic mechanisms.
+    Custom protocols remain outside scope unless explicitly declared in actor metadata.
+    An exhausted decision may use only a configured exact safe fallback.
     """
     import json
 
     from simulation_core.observation import observe, permissions_for
+    from simulation_core.policy_metadata import uses_llm_envelope
     from simulation_core.types import Observation
 
     config = artifact.manifest.simulation
@@ -293,12 +294,12 @@ def verify_llm_observations(artifact: JobResult) -> VerificationFinding:
             expected_actors = {
                 d.action.actor_id
                 for d in event.decisions
-                if actors[d.action.actor_id].policy_id == "llm.v1"
+                if uses_llm_envelope(actors[d.action.actor_id])
             }
             accepted = []
             for call in event.model_calls:
                 actor = actors[call.actor_id]
-                if actor.policy_id != "llm.v1":
+                if not uses_llm_envelope(actor):
                     continue
                 if actor.id not in expected_actors:
                     raise ValueError("Recorded call has no committed actor decision")
@@ -316,13 +317,32 @@ def verify_llm_observations(artifact: JobResult) -> VerificationFinding:
                 if call.status == "accepted":
                     accepted.append(actor.id)
                 checked += 1
-            if set(accepted) != expected_actors or len(accepted) != len(expected_actors):
-                raise ValueError("Each llm.v1 decision requires exactly one accepted call")
+            fallbacks = set()
+            for decision in event.decisions:
+                aid = decision.action.actor_id
+                if aid not in expected_actors or aid in accepted:
+                    continue
+                actor = actors[aid]
+                configured = actor.attributes.get("safe_fallback_actions", {})
+                calls = [call for call in event.model_calls if call.actor_id == aid]
+                attempts = actor.policy_parameters.get("max_attempts", 2)
+                if (
+                    isinstance(configured, dict)
+                    and configured.get(decision.action.kind) == decision.action.payload
+                    and len(calls) == attempts
+                    and all(call.status in {"invalid_response", "gateway_error"} for call in calls)
+                    and decision.rationale
+                ):
+                    fallbacks.add(aid)
+            if set(accepted) | fallbacks != expected_actors or len(accepted) != len(set(accepted)):
+                raise ValueError(
+                    "Each declared LLM decision needs one accepted call or an exhausted, explicitly configured safe fallback"
+                )
     except (ValueError, TypeError, KeyError) as exc:
         return VerificationFinding(id="llm_observation_privacy", status="failed", evidence=str(exc))
     return VerificationFinding(
         id="llm_observation_privacy",
         status="verified" if checked else "unverified",
-        evidence=f"Checked {checked} llm.v1 requests against canonical precommit observations, including identity, public/private facts and memory",
-        required=bool(checked),
+        evidence=f"Checked {checked} standard LLM-envelope requests against canonical precommit observations, including identity, public/private facts, memory and explicit fallback traces",
+        required=any(uses_llm_envelope(actor) for actor in actors.values()),
     )

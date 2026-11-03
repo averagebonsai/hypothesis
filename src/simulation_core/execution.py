@@ -9,6 +9,7 @@ from pydantic import model_validator
 
 from .benchmark import BenchmarkReport, BenchmarkRunner
 from .checkpoint import RuntimeOptions
+from .policy_metadata import uses_llm_envelope
 from .provenance import resolve_pointer, same_json
 from .registry import ComponentRegistry
 from .request import ExperimentRequest
@@ -29,7 +30,7 @@ class JobManifest(FrozenModel):
             raise ValueError("Duplicate actor behavior profile")
         for behavior in self.request.actor_behaviors:
             actor = actors.get(behavior.actor_id)
-            if actor is None or actor.policy_id != "llm.v1":
+            if actor is None or not uses_llm_envelope(actor):
                 raise ValueError("Behavior profiles require a matching LLM actor")
             if actor.policy_parameters.get("behavior") != behavior.model_dump(mode="json"):
                 raise ValueError("Resolved configuration overrides actor behavior")

@@ -40,6 +40,13 @@ class Implementation(FrozenModel):
     files: tuple[SourceFile, ...] = Field(min_length=1, max_length=40)
 
 
+class AuthoredCandidate(FrozenModel):
+    """A complete offline candidate; no separate prototype-to-implementation handoff."""
+
+    plan: CodingPlan
+    implementation: Implementation
+
+
 class NotebookReview(FrozenModel):
     approved: bool
     issues: tuple[str, ...] = ()
@@ -76,6 +83,17 @@ class ImplementationResponse(FrozenModel):
     def one_outcome(self) -> Self:
         if (self.implementation is None) == (self.review is None):
             raise ValueError("Return exactly one implementation or review request")
+        return self
+
+
+class CandidateResponse(FrozenModel):
+    candidate: AuthoredCandidate | None
+    review: ReviewRequest | None
+
+    @model_validator(mode="after")
+    def one_outcome(self) -> Self:
+        if (self.candidate is None) == (self.review is None):
+            raise ValueError("Return exactly one complete candidate or review request")
         return self
 
 

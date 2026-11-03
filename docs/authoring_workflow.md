@@ -1,5 +1,9 @@
 # Fast authoring without historical experiment access
 
+The default is now [single-pass authoring](single_pass_authoring.md): one complete
+candidate, executable synthetic starters and `author-check`. The staged mode is
+retained explicitly for compatibility.
+
 The external coding agent starts with a concise generated interface guide and
 optional domain-neutral templates. Muse receives `/inputs/starter/INTERFACES.md`
 and `/inputs/starter/experiment_extension/`; the API backend receives the guide in
@@ -14,21 +18,22 @@ uv run python -m agent_tools starter /tmp/new-authoring-starter
 uv run python -m agent_tools starter /tmp/new-tool-starter --kind tool
 ```
 
-Copy only needed templates and replace their explicit `NotImplementedError` stubs.
-The starter does not contain a solved experiment, fake passing tests, predicted
-LLM behavior or a new mechanism when reuse suffices. Full source remains readable
+Copy and adapt only the needed files from the runnable synthetic starter.
+The starter is a synthetic executable teaching example, with real tests and no
+past experiment results or predicted LLM behavior. Its example rule must be replaced
+or removed when an approved mechanism already matches the request. Full source remains readable
 for specific unresolved questions; reading transport internals is not a prerequisite.
 
 ## Continuity and frozen tests
 
 The default Muse backend keeps one authoring container, workspace, private CLI home
 and session UUID for the whole experiment. Each stage appends a new instruction
-through `muse exec --session-id`; planning discoveries, conversation context, scratch
-files, prototypes and notes remain available during implementation and repairs.
+through `muse exec --session-id`; discoveries, conversation context, scratch
+files and notes remain available during complete-candidate repairs and notebook review.
 The controller refreshes read-only inputs between turns and overlays only returned,
 normalized source files. It does not reconstruct the workspace from selected files.
 
-The controller still freezes tests/configuration and runs acceptance, regression,
+The controller freezes each sealed candidate before live execution and runs acceptance, regression,
 preview and simulation jobs in separate workers. Freezing prevents acceptance criteria
 from being silently weakened; it is not an independent examiner. Stage responses are
 removed before each turn so an old response cannot satisfy a new stage. New experiments
@@ -78,10 +83,11 @@ uv run python -m agent_tools --sandbox hypothesis-worker preview \
 inputs. Before plan freeze, it resolves builtin `llm.v1` transport fields: actor
 model (`MODEL`), reasoning effort, output tokens, retry attempts and per-actor call
 budget. It preserves instructions, personas, permissions and all scientific data.
-Defaults: no explicit generation-token ceiling, two attempts per decision, 48 calls
-per actor and a shared relay ceiling of 48 calls. For known schedules, preflight
-reserves calls for every decision and configured retry; repeated experiments must
-set a sufficient explicit shared call budget. Provider-default output limits may
+Defaults: concurrent actor calls, streaming, no explicit generation-token ceiling,
+and two attempts per decision. Shared and per-actor budgets derive from the known
+schedule; custom dynamic protocols use the max_steps bound. Explicit budgets remain
+available and are checked before execution. Numbered API_KEY_2, API_KEY_3, etc. are
+leased on the host, one concurrent call per distinct key; the coding CLI uses API_KEY. Provider-default output limits may
 still apply when the cap is omitted. Override
 these explicitly through the settings API; `author --actor-output-tokens N` exposes
 the common CLI choice. The exact resolved settings are audited, supplied to the

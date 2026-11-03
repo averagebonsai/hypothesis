@@ -1,5 +1,9 @@
 # Muse Code headless coding worker
 
+Authoring now defaults to a complete candidate in one pass, with executable starters
+and `author-check`. See [single-pass authoring](single_pass_authoring.md). Use
+`--legacy-staged` only for the older separate planning/implementation contract.
+
 The default coding backend is now **Muse Code**, installed in its own Docker
 image. `CodingAgent.from_environment(..., sandbox="hypothesis-worker")` selects
 it; the former direct Responses API backend is available only with
@@ -79,16 +83,18 @@ networking.
 
 The CLI writes normal files, avoiding a giant code-containing JSON answer:
 
-- Planning: `draft.json` holds native plan/config/manifest data; ordinary `tests/`
-  files contain the proposed tests.
-- Implementation/repair: `experiment_extension/` contains Python files and
-  `summary.txt` describes the change.
-- `python -m extension_worker.muse assemble` reads these files as data and creates
-  a Pydantic-validated `response.json`. It never imports generated Python.
+- Default complete candidate: `draft.json` holds native configuration/manifest
+  data, `tests/` holds grounded cases, and `experiment_extension/` holds code and
+  notebook generators. `summary.txt` describes the candidate.
+- `author-check` performs the local offline gates and writes a Pydantic-validated
+  `response.json` when ready. Collection itself never imports generated Python;
+  tests, composition and preview imports run only in container subprocesses.
+- The explicit legacy mode retains separate planning/implementation submissions.
+  `python -m extension_worker.muse assemble` remains a data-only assembler.
 - A `review.json` can terminate a stage with a structured capability/revision gap.
 
 The controller reads only the response, applies its existing static plan review,
-freezes tests/config, normalizes formatting, seals a new bundle version and runs
+normalizes formatting, seals the complete candidate before live calls, and runs
 all existing validation gates in the offline worker. A CLI exit code of zero is
 not experiment acceptance. Notebook generation/execution, event replay, custom
 verification and actual LLM actor calls remain validation-worker responsibilities.

@@ -1,0 +1,222 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "public_goods_fast_faae5470",
+  "version": "v1",
+  "gap_analysis": {
+    "objective": "Three LLM participants play six simultaneous public-goods rounds with a known endowment withdrawal after round 3; measure how contributions adapt while savings remain spendable.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "simultaneous-rounds",
+          "description": "Six simultaneous rounds with one joint contribution batch per round and no sequential phases.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "simultaneous joint batch per round",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "simultaneous.v1"
+        ],
+        "reason": "simultaneous.v1 runs every actor in one joint batch per round for a fixed number of rounds, exactly matching the six simultaneous contribution rounds.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "live-llm-policies",
+          "description": "Three live LLM actors with neutral own-wealth objectives, private memory, and no prescribed strategy.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "once per round per actor",
+          "evaluation": "stochastic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1"
+        ],
+        "reason": "llm.v1 carries shared scientific instructions plus a private typed behavior profile per actor, with permission-filtered observations and memory; transport is resolved centrally.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "contribution-action",
+          "description": "One scalar contribution per actor per round with an explicit contribution field.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {
+            "p1": 1,
+            "p2": 1,
+            "p3": 1
+          },
+          "constraints": [
+            "finite",
+            "nonnegative",
+            "bounded by available funds"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved action schema names a public-goods contribution; an explicit contribution field keeps contributions distinct from balances and payoffs in every payload.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "withdrawal-mechanism",
+          "description": "Endowment withdrawal schedule, savings-funded budget legality, public-goods payoffs, and public round feedback for varied N, horizons, endowments, and multipliers.",
+          "action_shape": "scalar",
+          "dimensions_per_actor": {},
+          "constraints": [
+            "contribution within available funds",
+            "no borrowing against pool payout",
+            "joint commitment before payout"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": [
+            "reject infeasible contributions",
+            "no double counting of wealth and payoff"
+          ]
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved mechanism implements endowment schedules, savings-funded budgets, or public-goods payoffs; recording.v1 collects actions without any economic model, and Bertrand/Stackelberg/normal-form rules do not match.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reference-trajectories",
+          "description": "Mathematical reference trajectories: finite-horizon zero-contribution benchmark and full-reinvestment group-wealth reference with marginal private return.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Both references are closed-form arithmetic needing no search or solver API, so plain utility functions with stated assumptions are the smallest coherent form.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "reporting",
+          "description": "Offline preview plus final explanatory report with trajectories, withdrawal marker, phase statistics, comparisons, rationales, assumptions, and limitations.",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "New preview/final generator functions in experiment_extension.report extend the generic simulation_core.reports writers with domain narrative, calculated references, and figures from recorded results.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.public_goods_fast_faae5470.mechanism",
+      "kind": "mechanism",
+      "purpose": "Six-round public-goods settlement with known endowment withdrawal: budget legality, payoff formula, saved balances, public round feedback.",
+      "gap_id": "withdrawal-mechanism",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.mechanism:PublicGoodsWithdrawalMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_mechanism_budget_legality",
+          "category": "functional",
+          "expected": "Contributions within available funds accepted, including over-20 with savings and all-in after withdrawal; over-budget, negative, and malformed batches rejected.",
+          "reference": "Hand-derived budget cases in tests/test_mechanism.py computed from the request payoff and availability rules."
+        },
+        {
+          "name": "test_mechanism_payoff_identity",
+          "category": "mathematical",
+          "expected": "Payoffs equal endowment minus contribution plus pool share; closing balances equal opening plus payoff; aggregate wealth identity holds.",
+          "reference": "Hand-derived payoff and wealth-identity cases in tests/test_mechanism.py for request and varied parameters."
+        },
+        {
+          "name": "test_mechanism_withdrawal_boundary",
+          "category": "functional",
+          "expected": "Round 3 (tick 2) pays the endowment and round 4 (tick 3) pays zero; history records one entry per committed round.",
+          "reference": "Round-indexing cases at the 3/4 boundary in tests/test_mechanism.py."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_fast_faae5470.contribution",
+      "kind": "action_schema",
+      "purpose": "Typed scalar contribution payload with an explicit contribution field, separating contributions from wealth accounting.",
+      "gap_id": "contribution-action",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.mechanism:ContributionPayload",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_contribution_payload_contract",
+          "category": "interface",
+          "expected": "Mechanism publishes one contribute kind per actor typed as ContributionPayload with a single contribution field.",
+          "reference": "Schema contract test in tests/test_mechanism.py."
+        }
+      ]
+    },
+    {
+      "id": "experimental.public_goods_fast_faae5470.references",
+      "kind": "utility",
+      "purpose": "Closed-form mathematical reference trajectories (zero-contribution and full-reinvestment) plus marginal private return; plain functions, no solver.",
+      "gap_id": "reference-trajectories",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.references:reference_trajectories",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_reference_trajectories_closed_form",
+          "category": "mathematical",
+          "expected": "Zero path ends at 60 and full-reinvestment path at 2240 per actor for request values; marginal private return equals multiplier/N.",
+          "reference": "Hand-derived trajectory values in tests/test_references.py, independent of execution helpers."
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [],
+  "repair_counts": {},
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "preview_generator": "experiment_extension.report:preview",
+    "generator": "experiment_extension.report:report"
+  },
+  "verification": null
+}

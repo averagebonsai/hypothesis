@@ -291,6 +291,8 @@ def test_prepared_request_variants_and_budget_are_valid():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "experiment_requests"
+    if not root.is_dir():
+        pytest.skip("Prepared operator requests are host-only; excluded from worker images")
     settings = ActorExecutionSettings.model_validate_json(
         (root / "public_goods_fast.execution.json").read_text()
     )

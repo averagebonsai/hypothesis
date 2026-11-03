@@ -13,6 +13,8 @@ from simulation_core.request import ExperimentRequest
 from simulation_core.types import FrozenModel
 
 from .contracts import (
+    AuthoredCandidate,
+    CandidateResponse,
     CodingPlan,
     Implementation,
     ImplementationResponse,
@@ -32,6 +34,7 @@ SOURCE_FILES = tuple(
     for name in (
         "types",
         "policy",
+        "policy_metadata",
         "mechanism",
         "protocol",
         "solver",
@@ -59,6 +62,8 @@ SOURCE_FILES = tuple(
     "src/simulation_core/reporting.py",
     "src/simulation_core/reports.py",
     "src/agent_tools/guide.py",
+    "src/agent_tools/workspace.py",
+    "src/agent_tools/starter.py",
     "src/agent_tools/execution_settings.py",
     "src/components/library.py",
     "src/components/policies/scripted.py",
@@ -74,6 +79,12 @@ class AuthoringReviewRequired(RuntimeError):
     def __init__(self, review: ReviewRequest) -> None:
         self.review = review
         super().__init__(review.reason)
+
+
+class CandidateValidationError(ValueError):
+    def __init__(self, candidate: AuthoredCandidate, issues: tuple[str, ...]) -> None:
+        self.candidate, self.issues = candidate, issues
+        super().__init__("\n".join(issues))
 
 
 class AuthoringBudgetError(ValueError):
@@ -142,11 +153,13 @@ class CodingAgent:
         instructions_path: Path | None = None,
         execution_settings: ActorExecutionSettings | None = None,
         content_review: bool = False,
+        combined_authoring: bool = True,
         access_description: str = "Explicit API payload only; no filesystem, shell, web, retrieval, or code-execution tools supplied",
     ) -> None:
         self.reasoning_effort = reasoning_effort
         self.execution_settings = execution_settings
         self.content_review = content_review
+        self.combined_authoring = combined_authoring
         self.max_output_tokens = max_output_tokens
         self.project = project.resolve()
         self.gateway = BoundedGateway(
@@ -169,7 +182,8 @@ class CodingAgent:
             "actor_execution": None
             if execution_settings is None
             else execution_settings.model_dump(mode="json"),
-            "authoring_contract_version": 2,
+            "authoring_contract_version": 3,
+            "combined_authoring": combined_authoring,
             "content_review": content_review,
             "source_files": [
                 {"path": source["path"], "sha256": source["sha256"]} for source in sources
@@ -216,8 +230,9 @@ class CodingAgent:
         backend: str = "muse",
         sandbox: str | None = None,
         actor_max_output_tokens: int | None = None,
-        actor_max_total_calls: int = 48,
+        actor_max_total_calls: int | None = None,
         actor_settings: ActorExecutionSettings | None = None,
+        combined_authoring: bool = True,
     ) -> "CodingAgent":
         if backend == "muse":
             from components.gateways.settings import LiveModelSettings
@@ -238,6 +253,7 @@ class CodingAgent:
                 resume=resume,
                 max_calls=max_calls,
                 max_output_tokens=max_output_tokens,
+                combined_authoring=combined_authoring,
                 execution_settings=actor_settings
                 or ActorExecutionSettings(
                     model=actors.model,
@@ -262,6 +278,7 @@ class CodingAgent:
             resume=resume,
             max_calls=max_calls,
             max_output_tokens=max_output_tokens,
+            combined_authoring=combined_authoring,
             execution_settings=actor_settings
             or ActorExecutionSettings(
                 model=LiveModelSettings.load(role="actor", env_file=project / ".env").model,
@@ -345,6 +362,83 @@ class CodingAgent:
             },
             NotebookReview,
         )
+
+    def author_candidate(
+        self,
+        request: ExperimentRequest,
+        experiment_id: str,
+        *,
+        previous: AuthoredCandidate | None = None,
+        feedback: str | None = None,
+        repair_scope: str = "candidate",
+    ) -> AuthoredCandidate:
+        task: dict[str, object] = {
+            "stage": "author_candidate",
+            "request": request.model_dump(mode="json"),
+            "experiment_id": experiment_id,
+            "repair_scope": repair_scope,
+        }
+        if previous is not None:
+            task["previous_candidate"] = previous.model_dump(mode="json")
+        if feedback is not None:
+            task["validation_feedback"] = feedback
+        response = self.call(task, CandidateResponse)
+        if response.review is not None:
+            raise AuthoringReviewRequired(response.review)
+        assert response.candidate is not None
+        result = response.candidate
+        plan = result.plan.model_copy(
+            update={"tests": self._normalize(result.plan.tests, "candidate_tests")}
+        )
+        if self.execution_settings is not None and plan.simulation is not None:
+            plan = plan.model_copy(
+                update={"simulation": self.execution_settings.resolve(plan.simulation)}
+            )
+        implementation = result.implementation.model_copy(
+            update={"files": self._normalize(result.implementation.files, "candidate_files")}
+        )
+        result = AuthoredCandidate(plan=plan, implementation=implementation)
+        issues = list(review_plan(self.project, request, experiment_id, plan))
+        paths = [file.path for file in implementation.files]
+        if len(set(paths)) != len(paths) or "experiment_extension/__init__.py" not in paths:
+            issues.append("Candidate needs unique source files and an explicit package initializer")
+        if previous is not None and repair_scope == "report_only":
+            notebook = previous.plan.bundle.notebook
+            module = notebook.generator.split(":")[0].replace(".", "/") + ".py" if notebook else ""
+            before = {file.path: file.content for file in previous.implementation.files}
+            after = {file.path: file.content for file in implementation.files}
+            if (
+                plan != previous.plan
+                or set(before) != set(after)
+                or any(before[path] != after[path] for path in before if path != module)
+            ):
+                issues.append(
+                    "Report-only repair changed configuration, tests or scientific source"
+                )
+        before_files = (
+            {
+                file.path: file.content
+                for file in (*previous.plan.tests, *previous.implementation.files)
+            }
+            if previous
+            else {}
+        )
+        after_files = {file.path: file.content for file in (*plan.tests, *implementation.files)}
+        private_json(
+            self.audit / f"candidate-review-{self.gateway.calls}.json",
+            {
+                "issues": issues,
+                "repair_scope": repair_scope,
+                "changed_files": sorted(
+                    path
+                    for path in before_files.keys() | after_files.keys()
+                    if before_files.get(path) != after_files.get(path)
+                ),
+            },
+        )
+        if issues:
+            raise CandidateValidationError(result, tuple(issues))
+        return result
 
     def plan(
         self,

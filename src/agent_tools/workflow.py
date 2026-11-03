@@ -1,6 +1,10 @@
 """Opt-in orchestration. Importing/configuring this module starts no model or worker."""
 
+import json
+import os
+import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -11,6 +15,7 @@ from simulation_core.request import ExperimentRequest
 from .authoring import (
     AuthoringBudgetError,
     AuthoringReviewRequired,
+    CandidateValidationError,
     CodingAgent,
     CodingPlan,
     Implementation,
@@ -19,7 +24,7 @@ from .authoring import (
     private_json,
 )
 from .bundles import seal_bundle
-from .contracts import AuthoringOutcome, ReviewRequest
+from .contracts import AuthoredCandidate, AuthoringOutcome, ReviewRequest
 from .docker_worker import DockerWorker
 from .specs import RunReceipt
 
@@ -42,33 +47,60 @@ def _run_authoring(
     """
     if destination.exists() or destination.name != experiment_id:
         raise ValueError("Use a fresh experiment directory, never a previous bundle")
+    private_json(agent.audit / "frozen_request.json", request.model_dump(mode="json"))
     plan: CodingPlan | None = None
     feedback = None
-    while True:
-        progress(f"Planning call {agent.gateway.calls + 1}: reviewing schema, bindings and tests")
-        try:
-            plan = agent.plan(request, experiment_id, previous=plan, feedback=feedback)
-            break
-        except PlanValidationError as exc:
-            plan, feedback = exc.plan, str(exc)
-        except ValidationError as exc:
-            feedback = str(exc)
-    private_json(agent.audit / "frozen_plan.json", plan.model_dump(mode="json"))
+    if not agent.combined_authoring:
+        while True:
+            progress(
+                f"Planning call {agent.gateway.calls + 1}: reviewing schema, bindings and tests"
+            )
+            try:
+                plan = agent.plan(request, experiment_id, previous=plan, feedback=feedback)
+                break
+            except PlanValidationError as exc:
+                plan, feedback = exc.plan, str(exc)
+            except ValidationError as exc:
+                feedback = str(exc)
+        private_json(agent.audit / "frozen_plan.json", plan.model_dump(mode="json"))
     previous: Implementation | None = None
+    previous_candidate: AuthoredCandidate | None = None
     feedback = None
+    repair_scope = "candidate"
     version = 1
     while True:
-        progress(f"Implementation call {agent.gateway.calls + 1}: candidate v{version}")
         try:
-            implementation = agent.implement(request, plan, previous=previous, feedback=feedback)
+            if agent.combined_authoring:
+                progress(f"Authoring call {agent.gateway.calls + 1}: complete candidate v{version}")
+                authored = agent.author_candidate(
+                    request,
+                    experiment_id,
+                    previous=previous_candidate,
+                    feedback=feedback,
+                    repair_scope=repair_scope,
+                )
+                plan, implementation = authored.plan, authored.implementation
+                previous_candidate = authored
+            else:
+                assert plan is not None
+                progress(f"Implementation call {agent.gateway.calls + 1}: candidate v{version}")
+                implementation = agent.implement(
+                    request, plan, previous=previous, feedback=feedback
+                )
+        except CandidateValidationError as exc:
+            if repair_scope != "report_only":
+                previous_candidate = exc.candidate
+            feedback = str(exc)
+            continue
         except (ValidationError, ValueError) as exc:
             if isinstance(exc, (PlanValidationError, AuthoringBudgetError)):
                 raise
             feedback = str(exc)
             continue
+        assert plan is not None
         candidate = destination / f"v{version}"
         job = materialize(candidate, request, plan, implementation, version)
-        seal_bundle(candidate)
+        candidate_seal = seal_bundle(candidate)
         if isinstance(job, JobManifest) and plan.bundle.notebook is not None:
             progress(
                 f"Rendering offline problem/theory preview for candidate v{version}; no actor calls"
@@ -77,6 +109,9 @@ def _run_authoring(
             private_json(agent.audit / f"preview-{version}.json", preview.model_dump(mode="json"))
             if not preview.response.passed:
                 previous = implementation
+                # A technical preview failure can originate in a calculation or schema,
+                # not just prose. No actors have run and the request remains immutable.
+                repair_scope = "candidate"
                 feedback = "Offline preview failed: " + (
                     preview.response.error or "Missing notebook"
                 )
@@ -95,12 +130,23 @@ def _run_authoring(
                 )
                 if not review.approved:
                     previous = implementation
+                    repair_scope = "report_only"
                     feedback = (
                         "Correct these named notebook/content issues before live execution: "
                         + "; ".join(review.issues)
                     )
                     version += 1
                     continue
+        if agent.combined_authoring:
+            assert previous_candidate is not None
+            private_json(
+                agent.audit / f"candidate-freeze-{version}.json",
+                {
+                    "candidate": previous_candidate.model_dump(mode="json"),
+                    "bundle_digest": candidate_seal.digest,
+                    "request": request.model_dump(mode="json"),
+                },
+            )
         progress(f"Validating and running candidate v{version} in the isolated worker")
         receipt = worker.execute(candidate, job, operation="run")
         private_json(agent.audit / f"validation-{version}.json", receipt.model_dump(mode="json"))
@@ -198,7 +244,21 @@ def _run_authoring(
                     affected_contracts=("saved_result", "live_execution"),
                 ),
             )
+        if any(
+            check.name == "regressions" and not check.passed for check in receipt.response.checks
+        ):
+            return AuthoringOutcome(
+                status="needs_review",
+                receipt=receipt,
+                candidate=str(candidate),
+                review=ReviewRequest(
+                    status="needs_review",
+                    reason="Trusted toolkit regression failed. Retain this candidate and repair the toolkit; do not ask the experiment author to modify the scaffold.",
+                    affected_contracts=("toolkit_regressions",),
+                ),
+            )
         previous = implementation
+        repair_scope = "candidate"
         feedback = (
             "\n".join(
                 check.name + ":\n" + check.output
@@ -227,8 +287,28 @@ def run_authoring(
     progress: Callable[[str], None] = print,
 ) -> AuthoringOutcome:
     """Return a structured terminal outcome; no extra model call after needs_review."""
+    started = time.monotonic()
+    agent.audit.mkdir(parents=True, exist_ok=True)
+    path = agent.audit / "workflow-progress.jsonl"
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    os.close(descriptor)
+
+    def tracked(message: str) -> None:
+        with path.open("a") as stream:
+            stream.write(
+                json.dumps(
+                    {
+                        "utc": datetime.now(UTC).isoformat(),
+                        "elapsed_seconds": time.monotonic() - started,
+                        "message": message,
+                    }
+                )
+                + "\n"
+            )
+        progress(message)
+
     try:
-        return _run_authoring(agent, request, experiment_id, destination, worker, progress=progress)
+        return _run_authoring(agent, request, experiment_id, destination, worker, progress=tracked)
     except (AuthoringReviewRequired, PlanValidationError) as exc:
         review = (
             exc.review
@@ -257,5 +337,5 @@ def run_authoring(
             candidate=str(versions[-1]) if versions else None,
         )
         private_json(agent.audit / "review_required.json", outcome.model_dump(mode="json"))
-        progress("Authoring stopped for " + review.status + ": " + review.reason)
+        tracked("Authoring stopped for " + review.status + ": " + review.reason)
         return outcome

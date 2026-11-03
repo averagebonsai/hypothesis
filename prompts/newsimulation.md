@@ -1,3 +1,8 @@
+Current execution SOP: [single-pass authoring](../docs/single_pass_authoring.md).
+The default authors configuration, code, tests and reporting together, validates
+with author-check, then seals a candidate before live execution. The request remains
+immutable; the separate planning/implementation mode is compatibility-only.
+
 # Standard Operating Procedure: Developing New Simulation Components
 
 ## Objective
@@ -163,7 +168,7 @@ The objective is to expand the toolkit through small, tested, reusable capabilit
 
 Use CodingPlan.bundle and simulation as native typed objects, never JSON document
 strings. Tool plans carry ToolInvocation instead of SimulationConfig. API responses
-carry a plan/implementation or a terminal ReviewRequest; needs_review/unsupported
+carry a complete candidate (plan and implementation) or a terminal ReviewRequest; needs_review/unsupported
 returns control immediately. Coding uses MODEL_CODING with max reasoning; actors
 use MODEL. Per-call limits and isolation remain, with no default total coding cap.
 

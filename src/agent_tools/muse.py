@@ -211,6 +211,19 @@ class MuseCodeGateway(ModelGateway):
     def prepare(self) -> dict[str, str]:
         base = self.worker.prepare()
         tag = "hypothesis-muse:" + base["framework_digest"][:20]
+        try:
+            cached = self.worker.image_id(tag)
+        except RuntimeError:
+            pass
+        else:
+            release = json.loads((self.project / "docker/muse-release.json").read_text())
+            self.prepared = {
+                **base,
+                "toolkit_image_id": base["image_id"],
+                "image_id": cached,
+                "muse_version": release["version"],
+            }
+            return dict(self.prepared)
         remote = "/tmp/hypothesis-muse-build-" + uuid4().hex
         with TemporaryDirectory(prefix="hypothesis-muse-build-") as temporary:
             context = Path(temporary)
@@ -275,6 +288,7 @@ class MuseCodeGateway(ModelGateway):
         root.chmod(0o755)
         task = json.loads(request.input_json)
         if request.actor_id != "coding_agent" or task.get("stage") not in {
+            "author_candidate",
             "plan_and_tests",
             "implementation",
             "repair_implementation",
@@ -298,7 +312,12 @@ class MuseCodeGateway(ModelGateway):
         from .guide import write_starter
 
         route = task.get("request", {}).get("execution_kind", "agent_simulation")
-        write_starter(inputs / "starter", kind="tool" if route == "tool" else "agent_simulation")
+        write_starter(
+            inputs / "starter",
+            kind="tool" if route == "tool" else "agent_simulation",
+            experiment_id=task.get("experiment_id")
+            or task.get("frozen_plan", {}).get("bundle", {}).get("experiment_id", "starter"),
+        )
         task["authoring_guide"] = "/inputs/starter/INTERFACES.md"
         task["starter_directory"] = "/inputs/starter"
         if "toolkit" in task:
@@ -316,7 +335,22 @@ class MuseCodeGateway(ModelGateway):
             path.write_text(file["content"])
         if frozen:
             task["frozen_tests_directory"] = "/inputs/frozen_tests/tests"
-        for file in task.get("previous_implementation", {}).get("files", []):
+        current = task.get("previous_candidate")
+        if current:
+            draft = {key: value for key, value in current["plan"].items() if key != "tests"}
+            (root / "workspace/draft.json").write_text(json.dumps(draft))
+            for file in current["plan"]["tests"]:
+                if not safe_source_path(file["path"], tests=True):
+                    raise ValueError("Invalid current candidate test path")
+                destination = root / "workspace" / file["path"]
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(file["content"])
+        current_files = (
+            current["implementation"]["files"]
+            if current
+            else task.get("previous_implementation", {}).get("files", [])
+        )
+        for file in current_files:
             if not safe_source_path(file["path"], tests=False):
                 raise ValueError("Invalid current-trial source path")
             path = root / "workspace" / file["path"]
@@ -444,6 +478,30 @@ class MuseCodeGateway(ModelGateway):
                 "note": "Data only; incomplete or unvalidated source, never a completed result",
             },
         )
+
+    def _collect_author_checks(self, audit: Path) -> None:
+        from .authoring import private_json
+
+        assert self.prepared is not None
+        result = bounded_command(
+            self.worker._docker(
+                "exec",
+                "--user",
+                "10001:10001",
+                self.container_name,
+                "python",
+                "-m",
+                "extension_worker.muse",
+                "author-check-report",
+            ),
+            seconds=20,
+            max_bytes=400000,
+        )
+        if result.code:
+            raise RuntimeError("Cannot export local author-check diagnostics")
+        if self._api_key.get_secret_value() in result.stdout:
+            raise RuntimeError("Credential detected in author-check diagnostics")
+        private_json(audit / "author-check.json", json.loads(result.stdout))
 
     @contextmanager
     def _exclusive(self) -> Iterator[None]:
@@ -595,6 +653,16 @@ class MuseCodeGateway(ModelGateway):
                         "scope": "Native CLI totals; failed-call token usage may be incomplete",
                     },
                 )
+                if stage == "author_candidate":
+                    try:
+                        self._collect_author_checks(audit)
+                    except (ValueError, OSError, RuntimeError):
+                        private_json(
+                            audit / "author-check-export-error.json",
+                            {
+                                "error": "Local author-check diagnostics could not be safely exported"
+                            },
+                        )
                 progress.record("stage_completed", "Authoring response received", **usage)
                 completed = True
                 return response.model_copy(
@@ -620,6 +688,7 @@ class MuseCodeGateway(ModelGateway):
                 raise
             finally:
                 raw.close()
+                private_json(audit / "activity.json", progress.activity_summary())
                 # Keep successful stages alive; a failed exec may leave child tools running.
                 # Stop the process tree before offline salvage, retaining only this trial's volumes.
                 if not completed and self.resources_created:

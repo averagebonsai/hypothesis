@@ -4,9 +4,10 @@ import os
 import selectors
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ def bounded_command(
     exchange: Callable[[str], str | None] | None = None,
     input_text: str | None = None,
     exchange_workers: int = 1,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
     on_tick: Callable[[], None] | None = None,
     on_stderr_line: Callable[[str], None] | None = None,
 ) -> ProcessResult:
@@ -35,6 +38,8 @@ def bounded_command(
     futures: dict[Future[str | None], bytes] = {}
     process = subprocess.Popen(
         args,
+        cwd=cwd,
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         stdin=subprocess.PIPE if exchange or input_text is not None else subprocess.DEVNULL,

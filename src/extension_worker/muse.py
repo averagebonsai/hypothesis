@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent_tools.authoring import safe_source_path
 from agent_tools.contracts import (
+    CandidateResponse,
     CodingPlan,
     Implementation,
     ImplementationResponse,
@@ -99,17 +100,23 @@ def source_files(directory: Path, *, tests: bool) -> tuple[SourceFile, ...]:
 def assemble() -> None:
     """Build native response objects from ordinary source files, without imports."""
     task = json.loads((INPUTS / "task.json").read_text())
-    response: NotebookReview | PlanningResponse | ImplementationResponse
+    response: NotebookReview | PlanningResponse | ImplementationResponse | CandidateResponse
     review_path = ROOT / "review.json"
     if task["stage"] == "review_notebook":
         response = NotebookReview.model_validate_json(read_text(ROOT / "notebook_review.json"))
     elif review_path.exists():
         review = ReviewRequest.model_validate_json(read_text(review_path))
         response = (
-            PlanningResponse(plan=None, review=review)
+            CandidateResponse(candidate=None, review=review)
+            if task["stage"] == "author_candidate"
+            else PlanningResponse(plan=None, review=review)
             if task["stage"] == "plan_and_tests"
             else ImplementationResponse(implementation=None, review=review)
         )
+    elif task["stage"] == "author_candidate":
+        from agent_tools.workspace import candidate_from_workspace
+
+        response = CandidateResponse(candidate=candidate_from_workspace(ROOT, task), review=None)
     elif task["stage"] == "plan_and_tests":
         draft = json.loads(read_text(ROOT / "draft.json"))
         draft["tests"] = [
@@ -127,6 +134,45 @@ def assemble() -> None:
         response = ImplementationResponse(implementation=implementation, review=None)
     (ROOT / "response.json").write_text(response.model_dump_json(indent=2))
     print("Validated response.json; no experiment code was imported")
+
+
+def author_check_evidence(root: Path) -> dict[str, object]:
+    """Bounded data-only export before the disposable authoring workspace is removed."""
+    directory = root / ".author-check"
+    if directory.is_symlink():
+        raise ValueError("Author-check diagnostics cannot be linked")
+    result: dict[str, object] = {}
+    report = directory / "report.json"
+    if report.exists():
+        result["latest"] = json.loads(read_text(report, 250000))
+    history = directory / "history.jsonl"
+    if history.exists():
+        if history.is_symlink():
+            raise ValueError("Author-check history cannot be linked")
+        with history.open("rb") as stream:
+            size = history.stat().st_size
+            stream.seek(max(0, size - 250000))
+            lines = stream.read(250000).splitlines()
+        summaries = []
+        for line in lines[-32:]:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue  # First line may have been truncated by the bounded tail.
+            summaries.append(
+                {
+                    "invocation_id": row.get("invocation_id"),
+                    "seconds": row.get("seconds"),
+                    "ready": row.get("ready"),
+                    "changed_files": row.get("changed_files"),
+                    "checks": [
+                        {key: item.get(key) for key in ("name", "passed", "cached", "seconds")}
+                        for item in row.get("results", [])
+                    ],
+                }
+            )
+        result["recent_invocations"] = summaries
+    return result
 
 
 def snapshot_workspace(root: Path) -> dict[str, str]:
@@ -160,6 +206,9 @@ def snapshot_workspace(root: Path) -> dict[str, str]:
 def main() -> None:
     if sys.argv[1:] == ["update-session"]:
         update_session_inputs(Path("/source"))
+        return
+    if sys.argv[1:] == ["author-check-report"]:
+        print(json.dumps(author_check_evidence(ROOT)))
         return
     if sys.argv[1:] == ["snapshot"]:
         print(json.dumps(snapshot_workspace(ROOT)))
@@ -244,6 +293,8 @@ def main() -> None:
     task = json.loads(Path("/inputs/task.json").read_text())
     if task["stage"] == "review_notebook":
         NotebookReview.model_validate_json(text)
+    elif task["stage"] == "author_candidate":
+        CandidateResponse.model_validate_json(text)
     elif task["stage"] == "plan_and_tests":
         PlanningResponse.model_validate_json(text)
     else:

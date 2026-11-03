@@ -1,0 +1,25 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "5db1b386e97f02c1d63ce5c086f0b53490388e72bd2d5ca0481e79af5cb13b4c",
+    "experiment_extension/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "experiment_extension/bounds.py": "b3821c3cd95330e209733b1ec39e693d47a046a97f4dc8b73047c9cf72187737",
+    "experiment_extension/checks.py": "ba2492e946557030070462f128e676fdd8356560000d4c1b9c5f90e57ccd66af",
+    "experiment_extension/mechanism.py": "475e1047cc6432bd748fab461be2d8293522418906c4872ab2e323953253b16c",
+    "experiment_extension/metrics.py": "5221d5d54f60811f1aa49283537e91846cc8cc73294a24d55db2a732c5350241",
+    "experiment_extension/policy.py": "7d68c0a4b7930552bf337d221be90869fdf893827ff5776853a7fc1ded33ca06",
+    "experiment_extension/report.py": "a66ba55901f52d1c4b7afaf9cad38156ea80f9fd58522dba507031dd50e49f88",
+    "experiment_extension/schemas.py": "658518ed7abda0f570881bb9355bf5a80b0611c63e018bd2c5721ff5b65be597",
+    "job.example.json": "4ab0081871ad4c0137403160888891b2adde054fd07f993e558551f0702fbbdd",
+    "tests/helpers.py": "fae396d41251004188452ae8bfa98cefe360b1b12dcf52aeb2ab7c64b3337465",
+    "tests/test_accounting.py": "4f769b96c6495bdcced126ccd390b354e968fd2f5bdb71f417fa335a05b57033",
+    "tests/test_bounds.py": "324aae96f38ce32fab78c45a874fb042820ea03973854bd180a78ab9a1ef30af",
+    "tests/test_constraints.py": "ec76ebcf3f8038ac03b6c68820d7270b3e131627383f887717958796bcb35a8d",
+    "tests/test_observations.py": "d1ffa5f36374ad080ed85e88f04d67e27ae79866c4ee027936edef06891a4351",
+    "tests/test_parameters.py": "e0f3f88d058360e1cf37a6cd846596d87dd562ff2798786b2c20c88aec0c4eda",
+    "tests/test_policy.py": "d818fbb2682610923e80ac636070bcc0b7883e0a395e552da961815e49444a0d",
+    "tests/test_reports.py": "2394069a0b5e83ec8be876bb338d898e7544a9cd0ffceb8cb6b97677c0dfc566",
+    "tests/test_timing.py": "5dfe1505e6189b0f9f6e322836cc1d598a2ceeb4372462316876096d82933db5"
+  },
+  "digest": "251f62cb1398995c112154f9fe98604c38e2874b338e06a5669d5cd11016fc7a"
+}

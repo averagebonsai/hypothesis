@@ -1,0 +1,126 @@
+{
+  "daily": [
+    {
+      "day": 1,
+      "capacity": 200,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 80,
+      "dispatched_b": 80,
+      "consolidated_profit": 5060.0
+    },
+    {
+      "day": 2,
+      "capacity": 200,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 80,
+      "dispatched_b": 80,
+      "consolidated_profit": 5100.0
+    },
+    {
+      "day": 3,
+      "capacity": 80,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 40,
+      "dispatched_b": 40,
+      "consolidated_profit": 4340.0
+    },
+    {
+      "day": 4,
+      "capacity": 80,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 40,
+      "dispatched_b": 40,
+      "consolidated_profit": 5380.0
+    },
+    {
+      "day": 5,
+      "capacity": 80,
+      "produced": 70,
+      "sold": 70,
+      "lost_sales": 10,
+      "dispatched_a": 40,
+      "dispatched_b": 40,
+      "consolidated_profit": 4590.0
+    },
+    {
+      "day": 6,
+      "capacity": 80,
+      "produced": 40,
+      "sold": 40,
+      "lost_sales": 40,
+      "dispatched_a": 0,
+      "dispatched_b": 80,
+      "consolidated_profit": 2040.0
+    },
+    {
+      "day": 7,
+      "capacity": 200,
+      "produced": 0,
+      "sold": 0,
+      "lost_sales": 80,
+      "dispatched_a": 160,
+      "dispatched_b": 40,
+      "consolidated_profit": -3240.0
+    },
+    {
+      "day": 8,
+      "capacity": 200,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 20,
+      "dispatched_b": 180,
+      "consolidated_profit": 5770.0
+    },
+    {
+      "day": 9,
+      "capacity": 200,
+      "produced": 80,
+      "sold": 80,
+      "lost_sales": 0,
+      "dispatched_a": 100,
+      "dispatched_b": 20,
+      "consolidated_profit": 6270.0
+    }
+  ],
+  "sold": 590,
+  "lost_sales": 130,
+  "consolidated_profit": 35310.0,
+  "role_profits": {
+    "manufacturer": 20310.0,
+    "supplier_a": 6320.0,
+    "supplier_b": 6360.0,
+    "logistics": 2320.0
+  },
+  "api_attempts": 48,
+  "decisions": 45,
+  "accepted_model_actions": 44,
+  "invalid_responses": 4,
+  "fallback_actions": 1,
+  "actor_request_seconds": {
+    "median": 28.4497,
+    "max": 92.719
+  },
+  "credential_slot_counts": {
+    "1": 13,
+    "2": 12,
+    "3": 12,
+    "4": 11
+  },
+  "max_credential_wait_seconds": 0.00011008372530341148,
+  "input_tokens": 66599,
+  "output_tokens": 146273,
+  "final_in_transit": {
+    "A": 100,
+    "B": 20
+  },
+  "independent_operator_arithmetic_audit": "passed; reads recorded JSON only, no generated code executed on host"
+}

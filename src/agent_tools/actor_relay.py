@@ -30,7 +30,7 @@ class ActorRelay:
         self.settings.validate_budget(job.simulation)
         self.gateway = BoundedGateway(
             gateway,
-            max_calls=self.settings.max_total_calls,
+            max_calls=self.settings.call_budgets(job.simulation)[0],
             max_output_tokens_per_call=self.settings.max_output_tokens,
         )
         self.model = model
@@ -113,6 +113,7 @@ class ActorRelay:
             entry["error"] = "invalid_actor_request"
             reply = {"error": "invalid_actor_request"}
         entry["elapsed_seconds"] = round(time.monotonic() - started, 4)
+        entry.update(getattr(self.gateway.gateway, "route_metadata", {}))
         with self._lock:
             self._active.pop(call_id, None)
         entry["call_id"] = call_id

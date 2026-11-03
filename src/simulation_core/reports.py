@@ -124,6 +124,7 @@ class ReportReference(FrozenModel):
     )
     actions: tuple[Action, ...] = ()
     payoffs: dict[str, float] = Field(default_factory=dict)
+    payoff_basis: Literal["round", "cumulative"] = "round"
     source_ticks: dict[str, int] = Field(
         default_factory=dict,
         description="Default: compare each actor's last recorded decision; explicit ticks support trajectories",
@@ -299,13 +300,27 @@ def display_results(artifact: JobResult, references: tuple[ReportReference, ...]
     events = [event for event in artifact.result.events if event.actions]
     last_ticks = {action.actor_id: event.state.tick for event in events for action in event.actions}
     headers = ["Turn", "Actor", "Action", "Payoff"]
+    show_cumulative = any(reference.payoff_basis == "cumulative" for reference in references)
+    if show_cumulative:
+        headers.append("Cumulative payoff")
     for reference in references:
-        headers += [f"{reference.name}: action", f"{reference.name}: payoff", "Payoff difference"]
+        metric = "cumulative payoff" if reference.payoff_basis == "cumulative" else "payoff"
+        headers += [
+            f"{reference.name}: action",
+            f"{reference.name}: {metric}",
+            f"{metric.capitalize()} difference",
+        ]
     rows = []
+    cumulative: dict[str, float] = {}
     for event in events:
+        if event.outcome:
+            for actor_id, value in event.outcome.payoffs.items():
+                cumulative[actor_id] = cumulative.get(actor_id, 0.0) + value
         for action in event.actions:
             payoff = event.outcome.payoffs.get(action.actor_id) if event.outcome else None
             row: list[object] = [event.state.tick, action.actor_id, _value(action.payload), payoff]
+            if show_cumulative:
+                row.append(cumulative.get(action.actor_id))
             for reference in references:
                 applies = event.state.tick == reference.source_ticks.get(
                     action.actor_id, last_ticks[action.actor_id]
@@ -316,10 +331,17 @@ def display_results(artifact: JobResult, references: tuple[ReportReference, ...]
                     else None
                 )
                 ref_payoff = reference.payoffs.get(action.actor_id) if applies else None
+                observed = (
+                    cumulative.get(action.actor_id)
+                    if reference.payoff_basis == "cumulative"
+                    else payoff
+                )
                 row += [
                     _value(ref_action.payload) if ref_action else None,
                     ref_payoff,
-                    payoff - ref_payoff if payoff is not None and ref_payoff is not None else None,
+                    observed - ref_payoff
+                    if observed is not None and ref_payoff is not None
+                    else None,
                 ]
             rows.append(row)
     table = (
