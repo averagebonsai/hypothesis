@@ -230,6 +230,18 @@ def test_process_uploaded_document():
     assert doc_info["mime_type"] == "image/png"
     assert doc_info["dimensions"] == "100x100"
 
+    # Test Markdown document processing
+    md_content = "# Research Specification\n\n- Hypothesis: Testing market clearing under asymmetric information."
+    b64_md = base64.b64encode(md_content.encode("utf-8")).decode("utf-8")
+    md_doc_info = process_uploaded_document({
+        "name": "experiment_spec.md",
+        "type": "text/markdown",
+        "data_base64": f"data:text/markdown;base64,{b64_md}",
+    })
+    assert md_doc_info["filename"] == "experiment_spec.md"
+    assert md_doc_info["mime_type"] == "text/markdown"
+    assert "Research Specification" in md_doc_info["extracted_text"]
+
 
 def test_generate_image_endpoint(client, monkeypatch):
     import web.app as web_app

@@ -166,6 +166,18 @@ def process_uploaded_document(doc: dict[str, Any]) -> dict[str, Any]:
         except (ValueError, TypeError, OSError) as err:
             return {"filename": name, "mime_type": mime_type, "error": f"Image parse error: {err}"}
 
+    elif name.lower().endswith((".md", ".markdown")) or "markdown" in mime_type:
+        try:
+            text_str = data_bytes.decode("utf-8", errors="replace")
+            return {
+                "filename": name,
+                "mime_type": "text/markdown",
+                "extracted_text": text_str[:25000],
+                "char_count": len(text_str),
+            }
+        except Exception as err:
+            return {"filename": name, "mime_type": "text/markdown", "error": f"Markdown parse error: {err}"}
+
     return {"filename": name, "mime_type": mime_type, "content": "Unsupported format"}
 
 

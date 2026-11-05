@@ -28,15 +28,14 @@ export default function HomePage() {
         </div>
 
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-100 max-w-4xl mx-auto leading-tight sm:leading-none">
-          Simulate Unscripted Interactions & Feedback with{" "}
+          Simulate Your Market With{" "}
           <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">
             Reasoning Agents
           </span>
         </h1>
 
-        <p className="mt-6 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Hypothesis couples multi-agent feedback loops, qualitative critique, and rigorous mathematical primitives 
-          with frontier reasoning LLMs. Simulate reader receptions, organizational deliberation, peer review, supply disruptions, and game equilibria in minutes.
+        <p className="mt-6 text-base sm:text-lg text-slate-400 max-w-4xl mx-auto leading-relaxed md:whitespace-nowrap">
+          Model feedback loops, supply shocks, and game equilibria using frontier reasoning models.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">

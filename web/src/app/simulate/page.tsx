@@ -12,11 +12,14 @@ import {
   Cpu,
   UploadCloud,
   FileText,
+  FileCode2,
   Image as ImageIcon,
   Trash2,
   AlertCircle,
   AlertTriangle,
-  Upload
+  Upload,
+  Eye,
+  ShieldCheck
 } from "lucide-react";
 
 function SimulateContent() {
@@ -52,16 +55,16 @@ function SimulateContent() {
   const handleFilesSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploadError(null);
-    const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
-    const validExts = [".pdf", ".png", ".jpg", ".jpeg"];
+    const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "text/markdown", "text/plain", "text/x-markdown"];
+    const validExts = [".pdf", ".png", ".jpg", ".jpeg", ".md", ".markdown"];
 
     Array.from(files).forEach((file) => {
       const lowerName = file.name.toLowerCase();
       const isValidExt = validExts.some((ext) => lowerName.endsWith(ext));
-      const isValidType = validTypes.includes(file.type);
+      const isValidType = validTypes.includes(file.type) || lowerName.endsWith(".md") || lowerName.endsWith(".markdown");
 
       if (!isValidExt && !isValidType) {
-        setUploadError(`File "${file.name}" rejected: Only PDF, JPEG, and PNG files are supported.`);
+        setUploadError(`File "${file.name}" rejected: Only PDF, Markdown (.md), JPEG, and PNG files are supported.`);
         return;
       }
 
@@ -73,11 +76,18 @@ function SimulateContent() {
       const reader = new FileReader();
       reader.onload = () => {
         const base64Str = reader.result as string;
+        const determinedType = file.type || (
+          lowerName.endsWith(".pdf")
+            ? "application/pdf"
+            : lowerName.endsWith(".md") || lowerName.endsWith(".markdown")
+            ? "text/markdown"
+            : "image/png"
+        );
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.name !== file.name),
           {
             name: file.name,
-            type: file.type || (lowerName.endsWith(".pdf") ? "application/pdf" : "image/png"),
+            type: determinedType,
             size: file.size,
             data_base64: base64Str,
           },
@@ -451,6 +461,40 @@ function SimulateContent() {
                               {field.description}
                             </p>
                           )}
+
+                          {/* Embedded Viewable-Only PDF of Waiting for Humphrey */}
+                          {currentPreset.id === "short_story_review" && (
+                            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/90 overflow-hidden shadow-inner">
+                              <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-950 border-b border-slate-800 text-xs font-mono select-none">
+                                <div className="flex items-center gap-2">
+                                  <Eye className="h-3.5 w-3.5 text-cyan-400" />
+                                  <span className="font-semibold text-slate-200">Waiting for Humphrey.pdf</span>
+                                  <span className="text-[10px] text-slate-400 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
+                                    Original Manuscript (2 Pages)
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  <span>View-Only • Download Disabled</span>
+                                </div>
+                              </div>
+                              <div
+                                className="relative w-full h-[480px] bg-slate-950 select-none"
+                                onContextMenu={(e) => e.preventDefault()}
+                                onKeyDown={(e) => {
+                                  if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "p")) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                              >
+                                <iframe
+                                  src="/waiting-for-humphrey.pdf#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
+                                  title="Waiting for Humphrey Manuscript"
+                                  className="w-full h-full border-0"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : null}
                     </div>
@@ -593,14 +637,14 @@ function SimulateContent() {
               />
             </div>
 
-            {/* 6. Supporting Documents & Empirical Figures (PDF, JPEG, PNG only) */}
+            {/* 6. Supporting Documents & Empirical Figures (PDF, Markdown, JPEG, PNG) */}
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
                 <label className="block text-xs font-mono font-bold text-slate-300 uppercase">
                   Supporting Documents & Research Data <span className="text-slate-500">(Optional)</span>
                 </label>
                 <span className="text-[10px] font-mono font-semibold text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-800/40">
-                  Supported formats: PDF, JPEG, PNG only
+                  Supported formats: PDF, Markdown (.md), JPEG, PNG
                 </span>
               </div>
 
@@ -622,7 +666,7 @@ function SimulateContent() {
                 <input
                   type="file"
                   multiple
-                  accept=".pdf,image/png,image/jpeg,image/jpg"
+                  accept=".pdf,.md,.markdown,text/markdown,text/plain,image/png,image/jpeg,image/jpg"
                   onChange={(e) => handleFilesSelected(e.target.files)}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
@@ -635,7 +679,7 @@ function SimulateContent() {
                       <span className="text-cyan-400 font-semibold underline">Click to upload</span> or drag and drop supporting research
                     </p>
                     <p className="text-[11px] font-mono text-slate-500 mt-1">
-                      Upload PDF papers, empirical charts, or market structure diagrams (Max 15MB)
+                      Upload PDF papers, Markdown (.md) specs, empirical charts, or scenario notes (Max 15MB)
                     </p>
                   </div>
                 </div>
@@ -657,12 +701,16 @@ function SimulateContent() {
                   </p>
                   <div className="divide-y divide-slate-850 rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
                     {uploadedDocs.map((doc) => {
-                      const isPdf = doc.type.includes("pdf") || doc.name.toLowerCase().endsWith(".pdf");
+                      const lower = doc.name.toLowerCase();
+                      const isPdf = doc.type.includes("pdf") || lower.endsWith(".pdf");
+                      const isMd = lower.endsWith(".md") || lower.endsWith(".markdown") || doc.type.includes("markdown");
                       return (
                         <div key={doc.name} className="flex items-center justify-between p-2.5 text-xs font-mono">
                           <div className="flex items-center gap-2.5 min-w-0">
                             {isPdf ? (
                               <FileText className="h-4 w-4 text-rose-400 shrink-0" />
+                            ) : isMd ? (
+                              <FileCode2 className="h-4 w-4 text-emerald-400 shrink-0" />
                             ) : (
                               <ImageIcon className="h-4 w-4 text-cyan-400 shrink-0" />
                             )}
