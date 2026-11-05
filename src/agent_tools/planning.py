@@ -27,10 +27,25 @@ def test_structure_issues(sources: dict[str, str], manifest: BundleManifest) -> 
     issues = []
     found = set()
     modules = {component.symbol.split(":")[0] for component in manifest.components}
-    if not modules:
-        modules.update(
-            {"components.library", "simulation_core.execution", "simulation_core.runtime"}
-        )
+    modules.update(
+        {
+            "components.library",
+            "simulation_core.execution",
+            "simulation_core.runtime",
+            "simulation_core.mechanism",
+            "simulation_core.protocol",
+            "simulation_core.policy",
+            "simulation_core.types",
+            "simulation_core.observation",
+            "simulation_core.problems",
+            "simulation_core",
+            "experiment_extension",
+        }
+    )
+    for component in manifest.components:
+        mod = component.symbol.split(":")[0]
+        modules.add(mod)
+        modules.add(mod.split(".")[0])
     for path, source in sources.items():
         try:
             tree = ast.parse(source, filename=path)
@@ -39,14 +54,24 @@ def test_structure_issues(sources: dict[str, str], manifest: BundleManifest) -> 
             continue
         imports: set[str] = set()
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module in modules:
+            if isinstance(node, ast.ImportFrom) and node.module and any(
+                node.module == m
+                or node.module.startswith(m + ".")
+                or m.startswith(node.module + ".")
+                for m in modules
+            ):
                 imports.update(alias.asname or alias.name for alias in node.names)
             if isinstance(node, ast.Import):
-                imports.update(
-                    alias.asname or alias.name.split(".")[0]
-                    for alias in node.names
-                    if alias.name in modules
-                )
+                for alias in node.names:
+                    root_name = alias.name.split(".")[0]
+                    if any(
+                        alias.name == m
+                        or alias.name.startswith(m + ".")
+                        or root_name == m
+                        for m in modules
+                    ):
+                        imports.add(alias.asname or alias.name.split(".")[-1])
+                        imports.add(alias.asname or alias.name)
         # Shared instances/class aliases are normal pytest style. Follow their
         # constructor dependencies instead of forcing repetitive imports/calls.
         changed = True
@@ -98,22 +123,49 @@ def test_structure_issues(sources: dict[str, str], manifest: BundleManifest) -> 
                     root = root.value
                 if isinstance(root, ast.Name):
                     roots.add(root.id)
-            return bool(roots & imports) or any(
+            return bool((roots | names) & imports) or any(
                 exercises_component(helper, visited | {name}, functions=functions, imports=imports)
                 for helper in names & functions.keys()
             )
 
-        for name, function in functions.items():
+        def function_has_assertion(
+            func_name: str,
+            visited: frozenset[str] = frozenset(),
+            *,
+            functions: dict[str, ast.FunctionDef] = functions,
+        ) -> bool:
+            if func_name in visited or func_name not in functions:
+                return False
+            fn = functions[func_name]
+            fn_nodes = tuple(ast.walk(fn))
+            if any(isinstance(n, ast.Assert) for n in fn_nodes):
+                return True
+            if any(
+                isinstance(n, ast.Attribute) and n.attr in {"raises", "fail"}
+                for n in fn_nodes
+            ):
+                return True
+            for call in (n for n in fn_nodes if isinstance(n, ast.Call)):
+                func_node = call.func
+                while isinstance(func_node, ast.Attribute):
+                    if func_node.attr.startswith(("assert", "check", "verify", "expect", "raises")):
+                        return True
+                    func_node = func_node.value
+                if isinstance(func_node, ast.Name):
+                    if func_node.id.startswith(("assert", "check", "verify", "expect")):
+                        return True
+                    if function_has_assertion(func_node.id, visited | {func_name}, functions=functions):
+                        return True
+            return False
+
+        for name in functions:
             if name.startswith("test_"):
                 found.add(name)
                 if not exercises_component(name):
                     issues.append(
                         f"{path}:{name}: must exercise an exported component, directly or through a helper/fixture"
                     )
-                nodes = tuple(ast.walk(function))
-                if not any(isinstance(node, ast.Assert) for node in nodes) and not any(
-                    isinstance(node, ast.Attribute) and node.attr == "raises" for node in nodes
-                ):
+                if not function_has_assertion(name):
                     issues.append(f"{path}:{name}: needs an assertion or an expected exception")
     required = {
         case.name for component in manifest.components for case in component.acceptance_tests

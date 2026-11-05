@@ -1,0 +1,497 @@
+{
+  "schema_version": "experimental.bundle.v1",
+  "experiment_id": "supplychain_fast_trial",
+  "version": "v2",
+  "gap_analysis": {
+    "objective": "How decentralized LLM supply-chain participants respond to a flood over nine days.",
+    "decisions": [
+      {
+        "requirement": {
+          "id": "phased_rules",
+          "description": "Nine-day four-phase ordering, production, allocation and settlement under flood transport caps",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 2,
+            "supplier_a": 2,
+            "supplier_b": 2,
+            "logistics": 2
+          },
+          "constraints": [
+            "transport capacity",
+            "production capacity",
+            "component balance",
+            "one-day transit"
+          ],
+          "timing": "sequential phases",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved mechanism models multi-actor component production, shared transport and settlement; extend Mechanism.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "domain_payloads",
+          "description": "Typed integer order, offer, allocation and production payloads",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 2,
+            "supplier_a": 2,
+            "supplier_b": 2,
+            "logistics": 2
+          },
+          "constraints": [
+            "nonnegative integers"
+          ],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "No approved payload matches these domain actions; extend action schemas.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "sequencing",
+          "description": "One manufacturer-order phase, one joint supplier phase, one logistics phase and one make phase per day",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 2,
+            "supplier_a": 2,
+            "supplier_b": 2,
+            "logistics": 2
+          },
+          "constraints": [],
+          "timing": "sequential phases",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "sequential.v1"
+        ],
+        "reason": "sequential.v1 supplies the configured 36-phase schedule; observation filtering stays in trusted code.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "live_choices",
+          "description": "Decentralized ordering, production and allocation choices from role observations",
+          "action_shape": "mixed",
+          "dimensions_per_actor": {
+            "manufacturer": 2,
+            "supplier_a": 2,
+            "supplier_b": 2,
+            "logistics": 2
+          },
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "unknown",
+          "required_guarantees": []
+        },
+        "disposition": "REUSE",
+        "selected_components": [
+          "llm.v1"
+        ],
+        "reason": "llm.v1 carries the four requested LLM actors with preserved behavior profiles and central budgets.",
+        "unresolved": [],
+        "unsupported_reason": null
+      },
+      {
+        "requirement": {
+          "id": "offline_reports",
+          "description": "Preview and recorded-result notebooks with capacity timeline, sales, inventories, utilization and profit",
+          "action_shape": "none",
+          "dimensions_per_actor": {},
+          "constraints": [],
+          "timing": "unspecified",
+          "evaluation": "deterministic",
+          "required_guarantees": []
+        },
+        "disposition": "EXTEND",
+        "selected_components": [],
+        "reason": "Reporting is experiment-specific; extend utilities on the shared explanatory writers.",
+        "unresolved": [],
+        "unsupported_reason": null
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "experimental.supplychain_fast_trial.mechanism.supplychainmechanism.v1",
+      "kind": "mechanism",
+      "purpose": "Phased decentralized supply-chain rules with flood transport caps and settlement accounting.",
+      "gap_id": "phased_rules",
+      "parent_interface": "simulation_core.mechanism.Mechanism",
+      "symbol": "experiment_extension.supplychain:SupplyChainMechanism",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_hand_derived_day_one_transitions",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        },
+        {
+          "name": "test_rejections_cover_each_constraint",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        },
+        {
+          "name": "test_boundary_zero_capacity_empty_stock_and_oversized_requests",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        },
+        {
+          "name": "test_capacity_schedule_boundaries",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        },
+        {
+          "name": "test_deterministic_replay_matches",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        },
+        {
+          "name": "test_registry_configuration_validates",
+          "category": "functional",
+          "expected": "Hand-derived day-1 balances, rejections, zero-capacity and timing boundaries hold",
+          "reference": "Day-1 make payoff 8000-1200-140=6660; day-3 capacity 80"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.action_schema.orderaction.v1",
+      "kind": "action_schema",
+      "purpose": "Manufacturer integer order quantities with priority request.",
+      "gap_id": "domain_payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.supplychain:OrderAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_hand_derived_day_one_transitions",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        },
+        {
+          "name": "test_rejections_cover_each_constraint",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        },
+        {
+          "name": "test_boundary_zero_capacity_empty_stock_and_oversized_requests",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        },
+        {
+          "name": "test_capacity_schedule_boundaries",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        },
+        {
+          "name": "test_deterministic_replay_matches",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        },
+        {
+          "name": "test_registry_configuration_validates",
+          "category": "interface",
+          "expected": "Order quantities validate and settle into backlogs",
+          "reference": "Order 80/80 raises backlog to 80 per component"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.action_schema.supplieroffer.v1",
+      "kind": "action_schema",
+      "purpose": "Supplier integer production and shipment-offer quantities.",
+      "gap_id": "domain_payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.supplychain:SupplierOffer",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_transfers_cancel_and_match_consolidated_total",
+          "category": "mathematical",
+          "expected": "Production costs and conservation identities hold across nine days",
+          "reference": "Supplier line 200+produced=dispatched+closing"
+        },
+        {
+          "name": "test_component_conservation_with_in_transit",
+          "category": "mathematical",
+          "expected": "Production costs and conservation identities hold across nine days",
+          "reference": "Supplier line 200+produced=dispatched+closing"
+        },
+        {
+          "name": "test_day_three_and_day_seven_capacity_boundaries",
+          "category": "mathematical",
+          "expected": "Production costs and conservation identities hold across nine days",
+          "reference": "Supplier line 200+produced=dispatched+closing"
+        },
+        {
+          "name": "test_physical_sales_ceiling",
+          "category": "mathematical",
+          "expected": "Production costs and conservation identities hold across nine days",
+          "reference": "Supplier line 200+produced=dispatched+closing"
+        },
+        {
+          "name": "test_lost_sales_never_become_backlog",
+          "category": "mathematical",
+          "expected": "Production costs and conservation identities hold across nine days",
+          "reference": "Supplier line 200+produced=dispatched+closing"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.action_schema.logisticsallocation.v1",
+      "kind": "action_schema",
+      "purpose": "Logistics integer per-supplier capacity allocation.",
+      "gap_id": "domain_payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.supplychain:LogisticsAllocation",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_transfers_cancel_and_match_consolidated_total",
+          "category": "mathematical",
+          "expected": "Dispatch accounting and in-transit timing hold",
+          "reference": "Day-9 dispatches arrive day 10, beyond the horizon"
+        },
+        {
+          "name": "test_component_conservation_with_in_transit",
+          "category": "mathematical",
+          "expected": "Dispatch accounting and in-transit timing hold",
+          "reference": "Day-9 dispatches arrive day 10, beyond the horizon"
+        },
+        {
+          "name": "test_day_three_and_day_seven_capacity_boundaries",
+          "category": "mathematical",
+          "expected": "Dispatch accounting and in-transit timing hold",
+          "reference": "Day-9 dispatches arrive day 10, beyond the horizon"
+        },
+        {
+          "name": "test_physical_sales_ceiling",
+          "category": "mathematical",
+          "expected": "Dispatch accounting and in-transit timing hold",
+          "reference": "Day-9 dispatches arrive day 10, beyond the horizon"
+        },
+        {
+          "name": "test_lost_sales_never_become_backlog",
+          "category": "mathematical",
+          "expected": "Dispatch accounting and in-transit timing hold",
+          "reference": "Day-9 dispatches arrive day 10, beyond the horizon"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.action_schema.makeaction.v1",
+      "kind": "action_schema",
+      "purpose": "Manufacturer integer finished-product quantity.",
+      "gap_id": "domain_payloads",
+      "parent_interface": "pydantic.BaseModel",
+      "symbol": "experiment_extension.supplychain:MakeAction",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_suppliers_cannot_observe_each_other",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_manufacturer_sees_commitments_but_not_supplier_stock",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_logistics_sees_no_manufacturer_inventory_or_demand",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_simultaneous_suppliers_share_no_uncommitted_actions",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_safe_fallback_payloads_pass_mechanism_legality",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_every_supplied_parameter_is_preserved",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        },
+        {
+          "name": "test_actor_behaviors_preserved_verbatim",
+          "category": "integration",
+          "expected": "Fallback payloads and decentralized observations validate",
+          "reference": "Zero produce/order/offer/allocation payloads pass legality"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.utility.simulation_dict.v1",
+      "kind": "utility",
+      "purpose": "Shared candidate configuration: parameters, initial states, permissions, LLM actors and assumptions.",
+      "gap_id": "offline_reports",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.configuration:simulation_dict",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_suppliers_cannot_observe_each_other",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_manufacturer_sees_commitments_but_not_supplier_stock",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_logistics_sees_no_manufacturer_inventory_or_demand",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_simultaneous_suppliers_share_no_uncommitted_actions",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_safe_fallback_payloads_pass_mechanism_legality",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_every_supplied_parameter_is_preserved",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        },
+        {
+          "name": "test_actor_behaviors_preserved_verbatim",
+          "category": "integration",
+          "expected": "Supplied parameters, behaviors, permissions and fallbacks preserved",
+          "reference": "36 phases; supplied capacity schedule 200/80/200"
+        }
+      ]
+    },
+    {
+      "id": "experimental.supplychain_fast_trial.utility.report.v1",
+      "kind": "utility",
+      "purpose": "Offline preview and recorded-result notebook generators for the flood experiment.",
+      "gap_id": "offline_reports",
+      "parent_interface": "typing.Callable",
+      "symbol": "experiment_extension.report:report",
+      "input_model": null,
+      "output_model": null,
+      "input_schema": null,
+      "output_schema": null,
+      "dependencies": [],
+      "method_contract": null,
+      "mathematical": false,
+      "acceptance_tests": [
+        {
+          "name": "test_nine_days_thirty_six_phases_forty_five_decisions",
+          "category": "integration",
+          "expected": "36 phases, 45 decisions, pending preview and recorded report hold",
+          "reference": "9 days x 4 phases = 36 ticks; 18+9+9+9 = 45 decisions"
+        },
+        {
+          "name": "test_preview_leaves_results_pending",
+          "category": "integration",
+          "expected": "36 phases, 45 decisions, pending preview and recorded report hold",
+          "reference": "9 days x 4 phases = 36 ticks; 18+9+9+9 = 45 decisions"
+        },
+        {
+          "name": "test_final_report_uses_recorded_results",
+          "category": "integration",
+          "expected": "36 phases, 45 decisions, pending preview and recorded report hold",
+          "reference": "9 days x 4 phases = 36 ticks; 18+9+9+9 = 45 decisions"
+        },
+        {
+          "name": "test_report_references_every_supplied_price_once",
+          "category": "integration",
+          "expected": "36 phases, 45 decisions, pending preview and recorded report hold",
+          "reference": "9 days x 4 phases = 36 ticks; 18+9+9+9 = 45 decisions"
+        }
+      ]
+    }
+  ],
+  "existing_dependencies": [],
+  "repair_counts": {
+    "implementation_validation": 1
+  },
+  "notebook": {
+    "report_version": "explanatory.v1",
+    "preview_generator": "experiment_extension.report:preview",
+    "generator": "experiment_extension.report:report"
+  },
+  "verification": null
+}

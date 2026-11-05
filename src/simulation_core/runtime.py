@@ -3,11 +3,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 
+from pydantic import ValidationError
+
 from .checkpoint import RuntimeCheckpoint, RuntimeOptions, config_digest
 from .logging import log_committed_decisions, replay
 from .observation import observe, permissions_for
 from .registry import ComponentRegistry
 from .types import (
+    Action,
     Decision,
     Event,
     ModelCallRecord,
@@ -130,7 +133,28 @@ class SimulationRuntime:
                     try:
                         pending[aid] = future.result().model_copy(deep=True)
                     except Exception as exc:  # noqa: BLE001 - retain completed peers before stopping
-                        failure = failure or exc
+                        actor = actors[aid]
+                        fallbacks = actor.attributes.get("safe_fallback_actions")
+                        fallback_applied = False
+                        if isinstance(fallbacks, dict):
+                            for kind, payload in fallbacks.items():
+                                if kind in actor.action_space.schemas and isinstance(payload, dict):
+                                    schema_id = actor.action_space.schemas[kind]
+                                    schema = self.registry.action_schemas[schema_id]
+                                    try:
+                                        schema.model_validate(payload)
+                                        pending[aid] = Decision(
+                                            action=Action(actor_id=aid, kind=kind, payload=payload),
+                                            rationale=f"Runtime safe fallback applied after policy failure: {exc}",
+                                            memory_update=None,
+                                            private_updates={},
+                                        )
+                                        fallback_applied = True
+                                        break
+                                    except (ValidationError, ValueError, TypeError):
+                                        continue
+                        if not fallback_applied:
+                            failure = failure or exc
                     saved_calls[aid] = policies[aid].model_calls()[baseline[aid] :]
                     persist()
             if failure is not None:
@@ -157,22 +181,85 @@ class SimulationRuntime:
             # Completeness is enforced independently of protocol-specific legality checks.
             if len(actions) != len(active) or {a.actor_id for a in actions} != set(active):
                 raise ValueError("Exactly one action required per active actor")
-            protocol.validate_action_batch(
-                world.model_copy(deep=True),
-                state.model_copy(deep=True),
-                tuple(action.model_copy(deep=True) for action in actions),
-            )
-            mechanism.validate_actions(
-                world.model_copy(deep=True),
-                state.model_copy(deep=True),
-                tuple(action.model_copy(deep=True) for action in actions),
-            )
-            transition = mechanism.transition(
-                world.model_copy(deep=True),
-                state.model_copy(deep=True),
-                tuple(action.model_copy(deep=True) for action in actions),
-            )
-            transition = TransitionResult.model_validate(transition.model_dump())
+            def execute_transition(
+                acts: tuple[Action, ...], current_state: WorldState = state
+            ) -> TransitionResult:
+                protocol.validate_action_batch(
+                    world.model_copy(deep=True),
+                    current_state.model_copy(deep=True),
+                    tuple(a.model_copy(deep=True) for a in acts),
+                )
+                mechanism.validate_actions(
+                    world.model_copy(deep=True),
+                    current_state.model_copy(deep=True),
+                    tuple(a.model_copy(deep=True) for a in acts),
+                )
+                trans = mechanism.transition(
+                    world.model_copy(deep=True),
+                    current_state.model_copy(deep=True),
+                    tuple(a.model_copy(deep=True) for a in acts),
+                )
+                return TransitionResult.model_validate(trans.model_dump())
+
+            try:
+                transition = execute_transition(actions)
+            except Exception as exc:
+                repaired = False
+                for i, d in enumerate(decisions):
+                    aid = d.action.actor_id
+                    actor = actors[aid]
+                    fallbacks = actor.attributes.get("safe_fallback_actions", {})
+                    if isinstance(fallbacks, dict) and d.action.kind in fallbacks:
+                        fb_payload = fallbacks[d.action.kind]
+                        if isinstance(fb_payload, dict):
+                            fb_action = Action(actor_id=aid, kind=d.action.kind, payload=fb_payload)
+                            candidate_actions = list(actions)
+                            candidate_actions[i] = fb_action
+                            try:
+                                transition = execute_transition(tuple(candidate_actions))
+                                decisions[i] = Decision(
+                                    action=fb_action,
+                                    rationale=f"Runtime safe fallback applied: illegal action rejected ({exc})",
+                                    memory_update=None,
+                                    private_updates={},
+                                )
+                                actions = tuple(candidate_actions)
+                                repaired = True
+                                break
+                            except Exception:  # noqa: BLE001, S112
+                                continue
+
+                if not repaired and len(decisions) > 1:
+                    candidate_actions = list(actions)
+                    candidate_decisions = list(decisions)
+                    any_applied = False
+                    for i, d in enumerate(decisions):
+                        aid = d.action.actor_id
+                        actor = actors[aid]
+                        fallbacks = actor.attributes.get("safe_fallback_actions", {})
+                        if isinstance(fallbacks, dict) and d.action.kind in fallbacks:
+                            fb_payload = fallbacks[d.action.kind]
+                            if isinstance(fb_payload, dict):
+                                fb_action = Action(actor_id=aid, kind=d.action.kind, payload=fb_payload)
+                                candidate_actions[i] = fb_action
+                                candidate_decisions[i] = Decision(
+                                    action=fb_action,
+                                    rationale=f"Runtime safe fallback applied: illegal action rejected ({exc})",
+                                    memory_update=None,
+                                    private_updates={},
+                                )
+                                any_applied = True
+                    if any_applied:
+                        try:
+                            transition = execute_transition(tuple(candidate_actions))
+                            actions = tuple(candidate_actions)
+                            decisions = candidate_decisions
+                            repaired = True
+                        except Exception:  # noqa: BLE001, S110
+                            pass
+
+                if not repaired:
+                    raise
             if set(transition.outcome.payoffs) - set(actors):
                 raise ValueError("Unknown actor in outcome")
             if set(transition.private_updates) - set(actors):

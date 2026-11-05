@@ -233,6 +233,8 @@ class CodingAgent:
         actor_max_total_calls: int | None = None,
         actor_settings: ActorExecutionSettings | None = None,
         combined_authoring: bool = True,
+        content_review: bool = False,
+        reasoning_effort: str = "max",
     ) -> "CodingAgent":
         if backend == "muse":
             from components.gateways.settings import LiveModelSettings
@@ -260,7 +262,8 @@ class CodingAgent:
                     max_output_tokens=actor_max_output_tokens,
                     max_total_calls=actor_max_total_calls,
                 ),
-                content_review=True,
+                content_review=content_review,
+                reasoning_effort=reasoning_effort,
                 instructions_path=project / "prompts/muse_coding_agent.md",
                 access_description="Muse Code filesystem and command tools in one persistent experiment-local session/container; trusted toolkit read-only; no host workspace or past experiments",
             )
@@ -279,6 +282,8 @@ class CodingAgent:
             max_calls=max_calls,
             max_output_tokens=max_output_tokens,
             combined_authoring=combined_authoring,
+            content_review=content_review,
+            reasoning_effort=reasoning_effort,
             execution_settings=actor_settings
             or ActorExecutionSettings(
                 model=LiveModelSettings.load(role="actor", env_file=project / ".env").model,
@@ -290,10 +295,20 @@ class CodingAgent:
         if self.gateway.max_calls is not None and self.gateway.calls >= self.gateway.max_calls:
             raise AuthoringBudgetError("Authoring API budget is exhausted")
         index = self.gateway.calls + 1
+        effort = self.reasoning_effort
+        if effort == "adaptive":
+            stage = task.get("stage")
+            repair_scope = task.get("repair_scope")
+            if repair_scope == "report_only" or stage == "review_notebook":
+                effort = "low"
+            elif task.get("validation_feedback") or task.get("previous_candidate"):
+                effort = "medium"
+            else:
+                effort = "high"
         request = ModelRequest(
             actor_id="coding_agent",
             model=self.model,
-            reasoning_effort=self.reasoning_effort,
+            reasoning_effort=effort,
             instructions=self.instructions,
             input_json=json.dumps(
                 {

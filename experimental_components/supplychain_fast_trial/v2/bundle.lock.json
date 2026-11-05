@@ -1,0 +1,17 @@
+{
+  "schema_version": "experimental.seal.v1",
+  "files": {
+    "bundle.json": "f0b0cedfefa9bb39a322ed9dcdf97fff3f938a83dfb06ba99dce24b742ce04ce",
+    "experiment_extension/__init__.py": "379dfed6b5245298c1f5220ed89b8dbc6bf462b0a62927d7d14e6051878329fe",
+    "experiment_extension/configuration.py": "b06659fc5aa4a0908a9d7a203dab39e83326c74936d15b42c2799f4f9183733a",
+    "experiment_extension/report.py": "b582e4b2a762d34346bb197773709d39c04009b232c385c2db13b1a133f45324",
+    "experiment_extension/supplychain.py": "7162bbcf3ad955dc25e51668c5f25c455bc3508244bcf47f6ebad098408a8c10",
+    "job.example.json": "0407b96f163e15b8c1fc3d7772fc5ebb3d595bc3219e49aaadd7506112e9a087",
+    "tests/support.py": "0b307cd92a2c29ac3397bc748776685824572aa8e45fae0cb0e6159cd0b3fbbb",
+    "tests/test_supplychain_accounting.py": "859e89e6700d3154db952b932cad91d555a8b6224ad41cd55ba02f87da714f87",
+    "tests/test_supplychain_info.py": "4c40b3306a33bd4fd01a3f4da36a8dbed05439014459679328b15b3675ec2daf",
+    "tests/test_supplychain_integration.py": "f1d61bbca8773097301b466eee531238c1cdedc0abf18857b17e045e91f034c5",
+    "tests/test_supplychain_rules.py": "fdfc19e5f7e98cceec1d0efbee0fd961b40522002fc989f8b69cd3aec2fcd65e"
+  },
+  "digest": "e4ded305e5dbbad4658aafa5cd2f8bfa632ce7eeb60352bacf8d0c1f42817617"
+}

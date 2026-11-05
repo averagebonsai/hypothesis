@@ -1,5 +1,6 @@
 """Approved reusable components. Experiment files contain parameters, never imports."""
 
+from components.common.communication import DirectMessagePayload, PublicBroadcastPayload
 from components.mechanisms.bertrand import (
     BertrandGameView,
     BertrandParameters,
@@ -63,6 +64,8 @@ def standard_registry(gateway: ModelGateway | None = None) -> ComponentRegistry:
             "homogeneous_bertrand.v1": BertrandGameView,
         },
         action_schemas={
+            "broadcast.v1": PublicBroadcastPayload,
+            "direct_message.v1": DirectMessagePayload,
             "move.v1": MovePayload,
             "number.v1": NumericPayload,
             "price.v1": PricePayload,

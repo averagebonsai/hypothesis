@@ -325,3 +325,63 @@ def test_payload():
 """
     }
     assert inspect_tests(sources, plan.bundle) == []
+
+
+def test_static_review_accepts_helper_assertions_and_simulation_imports(plan):
+    from agent_tools.planning import test_structure_issues as inspect_tests
+
+    sources = {
+        "tests/test_payload.py": """
+from simulation_core.runtime import SimulationRuntime
+
+def check_valid(val):
+    assert val > 0
+
+def test_payload():
+    runtime = SimulationRuntime
+    check_valid(10)
+"""
+    }
+    assert inspect_tests(sources, plan.bundle) == []
+
+
+def test_adaptive_reasoning_effort_routes_by_stage(plan, tmp_path):
+    from agent_tools.contracts import AuthoredCandidate, CandidateResponse
+
+    recorded_efforts = []
+
+    def fake_gateway(request):
+        recorded_efforts.append(request.reasoning_effort)
+        return CandidateResponse(
+            candidate=AuthoredCandidate(
+                plan=plan,
+                implementation=Implementation(
+                    summary="ok",
+                    files=(SourceFile(path="experiment_extension/__init__.py", content=""),),
+                ),
+            ),
+            review=None,
+        ).model_dump_json()
+
+    agent = CodingAgent(
+        PROJECT,
+        FakeGateway(fake_gateway),
+        "test-model",
+        tmp_path / "audit",
+        reasoning_effort="adaptive",
+        content_review=False,
+    )
+    assert not agent.content_review
+
+    # Stage 1: fresh candidate -> high
+    agent.call({"stage": "author_candidate"}, CandidateResponse)
+    assert recorded_efforts[-1] == "high"
+
+    # Stage 2: repair with feedback -> medium
+    agent.call({"stage": "author_candidate", "validation_feedback": "err"}, CandidateResponse)
+    assert recorded_efforts[-1] == "medium"
+
+    # Stage 3: report_only repair -> low
+    agent.call({"stage": "author_candidate", "repair_scope": "report_only"}, CandidateResponse)
+    assert recorded_efforts[-1] == "low"
+

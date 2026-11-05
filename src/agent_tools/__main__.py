@@ -50,6 +50,17 @@ def main() -> None:
     author.add_argument("--actor-settings", type=Path)
     author.add_argument("--actor-output-tokens", type=int, default=None)
     author.add_argument("--actor-call-budget", type=int, default=None)
+    author.add_argument(
+        "--content-review",
+        action="store_true",
+        default=False,
+        help="Enable optional LLM editorial review of notebooks (default: False for fast execution)",
+    )
+    author.add_argument(
+        "--reasoning-effort",
+        default="adaptive",
+        help="Reasoning effort for coding agent: adaptive, max, high, medium, low",
+    )
     for command in ("seal", "inspect", "validate", "run"):
         subparser = commands.add_parser(command)
         subparser.add_argument("bundle", type=Path)
@@ -117,6 +128,8 @@ def main() -> None:
             actor_max_total_calls=args.actor_call_budget,
             actor_settings=actor_settings,
             combined_authoring=not args.legacy_staged,
+            content_review=args.content_review,
+            reasoning_effort=args.reasoning_effort,
         )
         assert agent.execution_settings is not None
         model, gateway = configured_gateway(
