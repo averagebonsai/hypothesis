@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: hypothesis-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: API_KEY
+        sync: false

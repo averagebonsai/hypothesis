@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { apiUrl } from "@/lib/api";
 import { 
   Activity, 
   ArrowRight, 
@@ -37,7 +38,7 @@ export default function LiveSimulationPage() {
     if (!jobId) return;
 
     // Check current state via REST in case job already completed or failed
-    fetch(`http://localhost:8000/api/simulations/${jobId}`)
+    fetch(apiUrl(`/api/simulations/${jobId}`))
       .then((res) => res.json())
       .then((data) => {
         if (data.status === "failed") {
@@ -48,7 +49,7 @@ export default function LiveSimulationPage() {
       })
       .catch(() => {});
 
-    const eventSource = new EventSource(`http://localhost:8000/api/simulations/${jobId}/stream`);
+    const eventSource = new EventSource(apiUrl(`/api/simulations/${jobId}/stream`));
 
     eventSource.onmessage = (event) => {
       try {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { apiUrl } from "@/lib/api";
 import { 
   CheckCircle2, 
   Edit3, 
@@ -48,7 +49,7 @@ export default function VerificationPage() {
     setGeneratingImage(true);
     setImageError(null);
     try {
-      const res = await fetch("http://localhost:8000/api/simulations/generate-image", {
+      const res = await fetch(apiUrl("/api/simulations/generate-image"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
@@ -82,7 +83,7 @@ export default function VerificationPage() {
     setEditNumTurns(parsed.num_turns || 5);
     setEditNumAgents(parsed.num_agents || 3);
 
-    fetch("http://localhost:8000/api/simulations/align", {
+    fetch(apiUrl("/api/simulations/align"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed),
@@ -126,7 +127,7 @@ export default function VerificationPage() {
     sessionStorage.setItem("hypothesis_custom_spec", JSON.stringify(updatedForm));
 
     try {
-      const res = await fetch("http://localhost:8000/api/simulations/align", {
+      const res = await fetch(apiUrl("/api/simulations/align"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedForm),
@@ -184,7 +185,7 @@ export default function VerificationPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:8000/api/simulations/run", {
+      const res = await fetch(apiUrl("/api/simulations/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

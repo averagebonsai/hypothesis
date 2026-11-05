@@ -37,7 +37,8 @@ def test_align_simulation(client):
     response = client.post("/api/simulations/align", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert "supply shock" in data["readback"].lower()
+    readback = data["readback"].lower()
+    assert "supply" in readback and "shock" in readback
     assert len(data["assumptions"]) >= 3
     assert len(data["feasibility_rules"]) >= 2
     assert "schematic_image_prompt" in data

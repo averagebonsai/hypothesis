@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import logging
+import os
 import urllib.error
 import urllib.request
 from collections.abc import AsyncGenerator
@@ -26,10 +27,19 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Enable CORS for Next.js frontend on localhost:3000
+# Configure CORS (supports local development and deployed frontend e.g. Vercel)
+cors_origins_env = os.environ.get("CORS_ORIGINS", "")
+allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "*"]
+else:
+    for default_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+        if default_origin not in allowed_origins and "*" not in allowed_origins:
+            allowed_origins.append(default_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

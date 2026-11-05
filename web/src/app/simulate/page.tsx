@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { apiUrl } from "@/lib/api";
 import { 
   Play, 
   Sliders, 
@@ -92,7 +93,7 @@ function SimulateContent() {
 
   useEffect(() => {
     // Background sandbox preparation while user configures or chooses simulation
-    fetch("http://localhost:8000/api/sandbox/prepare", { method: "POST" })
+    fetch(apiUrl("/api/sandbox/prepare"), { method: "POST" })
       .then((res) => res.json())
       .then((data) => {
         setSandboxStatus(data.status || "ready");
@@ -103,7 +104,7 @@ function SimulateContent() {
         setSandboxStatus("error");
       });
 
-    fetch("http://localhost:8000/api/presets")
+    fetch(apiUrl("/api/presets"))
       .then((res) => res.json())
       .then((data) => {
         setPresets(data);
@@ -173,7 +174,7 @@ function SimulateContent() {
     setPresetError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:8000/api/simulations/run", {
+      const res = await fetch(apiUrl("/api/simulations/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

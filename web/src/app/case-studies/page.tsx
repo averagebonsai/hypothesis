@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BookOpen, Download, Play } from "lucide-react";
+import { apiUrl } from "@/lib/api";
 import {
   ResponsiveContainer,
   LineChart,
@@ -142,7 +143,7 @@ export default function CaseStudiesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/case-studies")
+    fetch(apiUrl("/api/case-studies"))
       .then((res) => res.json())
       .then((data) => {
         setCaseStudies(data);
@@ -203,7 +204,7 @@ export default function CaseStudiesPage() {
                     Clone & Run
                   </Link>
                   <a
-                    href={`http://localhost:8000${study.notebook_url}`}
+                    href={apiUrl(study.notebook_url)}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-center gap-2 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-800/80 text-slate-300 px-4 py-2 text-xs font-mono transition-all"

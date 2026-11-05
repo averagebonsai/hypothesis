@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { apiUrl } from "@/lib/api";
 import { 
   Download, 
   RotateCcw, 
@@ -64,7 +65,7 @@ export default function ResultsDashboardPage() {
   useEffect(() => {
     if (!jobId) return;
 
-    fetch(`http://localhost:8000/api/simulations/${jobId}/results`)
+    fetch(apiUrl(`/api/simulations/${jobId}/results`))
       .then((res) => res.json())
       .then((data) => {
         setResults(data);
@@ -93,7 +94,7 @@ export default function ResultsDashboardPage() {
         `clearly displaying protocol steps, participant actions, and evaluation rationales. ` +
         `Clean, professional visual infographic aesthetic accurately communicating user scenario details with high readability.`;
 
-      const res = await fetch("http://localhost:8000/api/simulations/generate-image", {
+      const res = await fetch(apiUrl("/api/simulations/generate-image"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptToUse }),
@@ -313,7 +314,7 @@ export default function ResultsDashboardPage() {
         {/* Export Suite Buttons */}
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={`http://localhost:8000/api/simulations/${jobId}/download/notebook`}
+            href={apiUrl(`/api/simulations/${jobId}/download/notebook`)}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 px-4 py-2.5 text-xs font-mono font-bold transition-all shadow-md shadow-cyan-500/20"
@@ -322,7 +323,7 @@ export default function ResultsDashboardPage() {
             Download .ipynb
           </a>
           <a
-            href={`http://localhost:8000/api/simulations/${jobId}/download/events`}
+            href={apiUrl(`/api/simulations/${jobId}/download/events`)}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-300 px-4 py-2.5 text-xs font-mono transition-all"
