@@ -66,6 +66,16 @@ class RunSimulationRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "status": "online",
+        "service": "hypothesis-simulation-api",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
+
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "healthy", "service": "hypothesis-simulation-api"}
